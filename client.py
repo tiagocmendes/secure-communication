@@ -27,6 +27,9 @@ class ClientProtocol(asyncio.Protocol):
 
         self.file_name = file_name
         self.loop = loop
+        self.symetric_ciphers=['AES','3DES']
+        self.cipher_modes=['ECB','CBC']
+        self.digest=['SHA256','SHA384','MD5','SHA512','BLAKE2']
         self.state = STATE_CONNECT  # Initial State
         self.buffer = ''  # Buffer to receive data chunks
 
@@ -40,8 +43,12 @@ class ClientProtocol(asyncio.Protocol):
         self.transport = transport
 
         logger.debug('Connected to Server')
-        
-        message = {'type': 'OPEN', 'file_name': self.file_name}
+        logger.debug('Sending cipher algorithms')
+
+        message={'type':'NEGOTIATION','algorithms':{'symetric_ciphers':self.symetric_ciphers,'chiper_modes':self.cipher_modes,'digest':self.digest}}
+
+        # TODO implementar na logica mais a frente
+        #message = {'type': 'OPEN', 'file_name': self.file_name} 
         self._send(message)
 
         self.state = STATE_OPEN
@@ -172,6 +179,7 @@ def main():
     args = parser.parse_args()
     file_name = os.path.abspath(args.file_name)
     level = logging.DEBUG if args.verbose > 0 else logging.INFO
+    level=logging.DEBUG
     port = args.port
     server = args.server
 

@@ -93,6 +93,8 @@ class ClientHandler(asyncio.Protocol):
 
 		if mtype == 'OPEN':
 			ret = self.process_open(message)
+		elif mtype=='NEGOTIATION':
+			logger.debug('Negotiation received')
 		elif mtype == 'DATA':
 			ret = self.process_data(message)
 		elif mtype == 'CLOSE':
@@ -251,6 +253,8 @@ def main():
 	args = parser.parse_args()
 	storage_dir = os.path.abspath(args.storage_dir)
 	level = logging.DEBUG if args.verbose > 0 else logging.INFO
+	level=logging.DEBUG
+
 	port = args.port
 	if port <= 0 or port > 65535:
 		logger.error("Invalid port")
@@ -264,7 +268,7 @@ def main():
 	logger.setLevel(level)
 
 	logger.info("Port: {} LogLevel: {} Storage: {}".format(port, level, storage_dir))
-	tcp_server(ClientHandler, worker=2, port=port, reuse_port=True)
+	tcp_server(ClientHandler, worker=2, port=port)
 
 
 if __name__ == '__main__':
