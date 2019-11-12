@@ -4,6 +4,12 @@ import base64
 import argparse
 import coloredlogs, logging
 import os
+import getpass
+
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes 
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 logger = logging.getLogger('root')
 
@@ -12,7 +18,58 @@ STATE_OPEN = 1
 STATE_DATA = 2
 STATE_CLOSE = 3
 
+"""
+Class with several cryptography functions.
+"""
+class Crypto:
+    """
+    Default constructor
 
+    @param symmetric_ciphers: symmetric ciphers algorithms
+    @param cipher_modes: cipher_modes algorithms
+    @param digest: digest algorithms
+    """
+    def __init__(self, symmetric_ciphers, cipher_modes, digest):
+        
+        self.symmetric_ciphers = symmetric_ciphers
+        self.cipher_modes = cipher_modes
+        self.digest = digest
+    
+    """
+    Symmetric key generation.
+
+    It prompts the user to enter a password.
+    """
+    def symmetric_key(self, algorithm):
+        
+        try:
+            password = getpass.getpass(prompt='Password for key: ', stream=None)
+        except Exception as error:
+            print('ERROR', error)
+        
+        password = password.encode()
+        salt = os.urandom(16)
+
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=100000,
+            backend=default_backend()
+        )
+        
+        key = kdf.derive(password)
+
+        if algorithm == 'AES':
+            self.symmetric_key = key[:16]
+        elif algorithm == '3DES':
+            self.symmetric_key = key[:8]
+        elif algorithm == 'ChaCha20':
+            self.symmetric_key = key[:64]
+        
+        return self.symmetric_key
+
+        
 class ClientProtocol(asyncio.Protocol):
     """
     Client that handles a single client
@@ -36,6 +93,8 @@ class ClientProtocol(asyncio.Protocol):
         self.choosen_mode=None
         self.choosen_digest=None
 
+        self.crypto = Crypto(self.symetric_ciphers, self.cipher_modes, self.digest)
+
     def connection_made(self, transport) -> None:
         """
         Called when the client connects.
@@ -48,7 +107,7 @@ class ClientProtocol(asyncio.Protocol):
         logger.debug('Connected to Server')
         logger.debug('Sending cipher algorithms')
 
-        message={'type':'NEGOTIATION','algorithms':{'symetric_ciphers':self.symetric_ciphers,'chiper_modes':self.cipher_modes,'digest':self.digest}}
+        message = {'type':'NEGOTIATION','algorithms':{'symetric_ciphers':self.symetric_ciphers,'chiper_modes':self.cipher_modes,'digest':self.digest}}
 
         # TODO implementar na logica mais a frente
         #message = {'type': 'OPEN', 'file_name': self.file_name} 
