@@ -5,7 +5,7 @@ import argparse
 import coloredlogs, logging
 import os
 import getpass
-
+import binascii
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
@@ -35,6 +35,31 @@ class Crypto:
         self.cipher_mode = cipher_modes
         self.digest = digest
         self.symmetric_key=None
+        self.mac=None
+        self.encrypted_file_name="encrypted_file.txt"
+    
+    def digest_gen(self):
+
+        if(self.digest=="SHA256"):
+            digest_generated = hashes.Hash(hashes.SHA256(), backend=default_backend())
+        elif(self.digest=="SHA384"):
+            digest_generated = hashes.Hash(hashes.SHA384(), backend=default_backend())
+        elif(self.digest=="MD5"):
+            digest_generated = hashes.Hash(hashes.MD5(), backend=default_backend())
+        elif(self.digest=="SHA512"):
+            digest_generated = hashes.Hash(hashes.SHA512(), backend=default_backend())
+        elif(self.digest=="BLAKE2"):
+            digest_generated = hashes.Hash(hashes.BLAKE2b(64), backend=default_backend())
+        
+        with open(self.encrypted_file_name,"rb") as fr:
+            my_text=fr.read(1024)
+            digest_generated.update(my_text)
+            while my_text:
+                my_text=fr.read(1024)
+                digest_generated.update(my_text)
+                
+      
+        self.mac=binascii.hexlify(digest.finalize())
     
     """
     Symmetric key generation.
@@ -160,6 +185,7 @@ class ClientProtocol(asyncio.Protocol):
 
         self.state = STATE_OPEN
 
+    
 
     def data_received(self, data: str) -> None:
         """
