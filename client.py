@@ -31,16 +31,17 @@ class Crypto:
     """
     def __init__(self, symmetric_ciphers, cipher_modes, digest):
         
-        self.symmetric_ciphers = symmetric_ciphers
-        self.cipher_modes = cipher_modes
+        self.symmetric_cipher = symmetric_ciphers
+        self.cipher_mode = cipher_modes
         self.digest = digest
+        self.symmetric_key=None
     
     """
     Symmetric key generation.
 
     It prompts the user to enter a password.
     """
-    def symmetric_key(self, algorithm):
+    def symmetric_key_gen(self):
         
         try:
             password = getpass.getpass(prompt='Password for key: ', stream=None)
@@ -60,14 +61,14 @@ class Crypto:
         
         key = kdf.derive(password)
 
-        if algorithm == 'AES':
+        if self.symmetric_cipher == 'AES':
             self.symmetric_key = key[:16]
-        elif algorithm == '3DES':
+        elif self.symmetric_cipher == '3DES':
             self.symmetric_key = key[:8]
-        elif algorithm == 'ChaCha20':
+        elif self.symmetric_cipher == 'ChaCha20':
             self.symmetric_key = key[:64]
         
-        return self.symmetric_key
+        #return self.symmetric_key
 
         
 class ClientProtocol(asyncio.Protocol):
@@ -93,7 +94,7 @@ class ClientProtocol(asyncio.Protocol):
         self.choosen_mode=None
         self.choosen_digest=None
 
-        self.crypto = Crypto(self.symetric_ciphers, self.cipher_modes, self.digest)
+        self.crypto = Crypto(self.choosen_cipher, self.choosen_mode, self.choosen_digest)
 
     def connection_made(self, transport) -> None:
         """
@@ -179,7 +180,11 @@ class ClientProtocol(asyncio.Protocol):
 
         elif mtype == 'NEGOTIATION_RESPONSE':
             logger.info("Negotiation response")
+            #Receive the choosen algorithms by the server 
             self.process_negotiation_response(message)
+            #Generate a symetric key
+            self.crypto.symmetric_key_gen()
+            logger.debug("Key: {}".format(self.crypto.symmetric_key))
         else:
             logger.warning("Invalid message type")
 
@@ -189,11 +194,11 @@ class ClientProtocol(asyncio.Protocol):
     def process_negotiation_response(self,message: str) -> bool:
         logger.debug("Process Negotiation: {}".format(message))
 
-        self.choosen_cipher=message['chosen_algorithms']['symetric_cipher']
-        self.choosen_mode=message['chosen_algorithms']['chiper_mode']
-        self.choosen_digest=message['chosen_algorithms']['digest']
+        self.crypto.symmetric_cipher=message['chosen_algorithms']['symetric_cipher']
+        self.crypto.cipher_mode=message['chosen_algorithms']['chiper_mode']
+        self.crypto.digest=message['chosen_algorithms']['digest']
 
-        logger.info("Choosen algorithms: {} {} {}".format(self.choosen_cipher,self.choosen_mode,self.choosen_digest))
+        logger.info("Choosen algorithms: {} {} {}".format(self.crypto.symmetric_cipher,self.crypto.cipher_mode,self.crypto.digest))
 		
 
     

@@ -30,7 +30,7 @@ class ClientHandler(asyncio.Protocol):
 		self.storage_dir = storage_dir
 		self.buffer = ''
 		self.peername = ''
-		self.symetric_ciphers=['SALSA20','3DES']
+		self.symetric_ciphers=['AES','3DES']
 		self.cipher_modes=['ECB','CBC']
 		self.digest=['SHA256','SHA384','MD5','SHA512','BLAKE2']
 		self.choosen_cipher=None
