@@ -32,6 +32,9 @@ class ClientProtocol(asyncio.Protocol):
         self.digest=['SHA256','SHA384','MD5','SHA512','BLAKE2']
         self.state = STATE_CONNECT  # Initial State
         self.buffer = ''  # Buffer to receive data chunks
+        self.choosen_cipher=None
+        self.choosen_mode=None
+        self.choosen_digest=None
 
     def connection_made(self, transport) -> None:
         """
@@ -113,12 +116,28 @@ class ClientProtocol(asyncio.Protocol):
 
         elif mtype == 'ERROR':
             logger.warning("Got error from server: {}".format(message.get('data', None)))
+            
+
+        elif mtype == 'NEGOTIATION_RESPONSE':
+            logger.info("Negotiation response")
+            self.process_negotiation_response(message)
         else:
             logger.warning("Invalid message type")
 
         self.transport.close()
         self.loop.stop()
 
+    def process_negotiation_response(self,message: str) -> bool:
+        logger.debug("Process Negotiation: {}".format(message))
+
+        self.choosen_cipher=message['chosen_algorithms']['symetric_cipher']
+        self.choosen_mode=message['chosen_algorithms']['chiper_mode']
+        self.choosen_digest=message['chosen_algorithms']['digest']
+
+        logger.info("Choosen algorithms: {} {} {}".format(self.choosen_cipher,self.choosen_mode,self.choosen_digest))
+		
+
+    
     def connection_lost(self, exc):
         """
         Connection was lost for some reason.
