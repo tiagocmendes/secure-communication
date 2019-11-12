@@ -40,7 +40,7 @@ class Crypto:
 
     It prompts the user to enter a password.
     """
-    def symmetric_key(self, algorithm):
+    def symmetric_key_gen(self, algorithm):
         
         try:
             password = getpass.getpass(prompt='Password for key: ', stream=None)
@@ -69,7 +69,6 @@ class Crypto:
         
         return self.symmetric_key
 
-        
 class ClientProtocol(asyncio.Protocol):
     """
     Client that handles a single client
