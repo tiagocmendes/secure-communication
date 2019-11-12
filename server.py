@@ -30,6 +30,9 @@ class ClientHandler(asyncio.Protocol):
 		self.storage_dir = storage_dir
 		self.buffer = ''
 		self.peername = ''
+		self.symetric_ciphers=['SALSA20','3DES']
+		self.cipher_modes=['ECB','CBC']
+		self.digest=['SHA256','SHA384','MD5','SHA512','BLAKE2']
 
 	def connection_made(self, transport) -> None:
 		"""
@@ -95,6 +98,7 @@ class ClientHandler(asyncio.Protocol):
 			ret = self.process_open(message)
 		elif mtype=='NEGOTIATION':
 			logger.debug('Negotiation received')
+			ret = self.process_negotiation(message)
 		elif mtype == 'DATA':
 			ret = self.process_data(message)
 		elif mtype == 'CLOSE':
@@ -116,6 +120,24 @@ class ClientHandler(asyncio.Protocol):
 
 			self.state = STATE_CLOSE
 			self.transport.close()
+
+
+	def process_negotiation(self,message: str) -> bool:
+		logger.debug("Process Negotiation: {}".format(message))
+		choosen_chipher=None
+		choosen_mode=None
+		choosen_digest=None
+
+		for cipher in self.symetric_ciphers:
+			if cipher in message['algorithms']['symetric_ciphers']:
+				choosen_chipher=cipher
+		
+		for cipher_mode in self.cipher_modes:
+			if cipher_mode in message['algorithms']['chiper_modes']:
+				choosen_mode=cipher_mode
+		
+
+		logger.debug("Choices {} {} {}".format(choosen_chipher,choosen_mode,choosen_digest))
 
 
 	def process_open(self, message: str) -> bool:
