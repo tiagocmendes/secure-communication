@@ -30,9 +30,12 @@ class ClientHandler(asyncio.Protocol):
 		self.storage_dir = storage_dir
 		self.buffer = ''
 		self.peername = ''
-		self.symetric_ciphers=['SALSA20','3DES']
+		self.symetric_ciphers=['AES','3DES']
 		self.cipher_modes=['ECB','CBC']
 		self.digest=['SHA256','SHA384','MD5','SHA512','BLAKE2']
+		self.choosen_cipher=None
+		self.choosen_mode=None
+		self.choosen_digest=None
 
 	def connection_made(self, transport) -> None:
 		"""
@@ -93,12 +96,12 @@ class ClientHandler(asyncio.Protocol):
 			return
 
 		mtype = message.get('type', "").upper()
-
+		error=None
 		if mtype == 'OPEN':
 			ret = self.process_open(message)
 		elif mtype=='NEGOTIATION':
 			logger.debug('Negotiation received')
-			ret = self.process_negotiation(message)
+			(ret,error) = self.process_negotiation(message)
 		elif mtype == 'DATA':
 			ret = self.process_data(message)
 		elif mtype == 'CLOSE':
@@ -109,7 +112,7 @@ class ClientHandler(asyncio.Protocol):
 
 		if not ret:
 			try:
-				self._send({'type': 'ERROR', 'message': 'See server'})
+				self._send({'type': 'ERROR', 'message': 'See server','data':error})
 			except:
 				pass # Silently ignore
 
@@ -127,16 +130,36 @@ class ClientHandler(asyncio.Protocol):
 		choosen_chipher=None
 		choosen_mode=None
 		choosen_digest=None
+		flag=None
 
 		for cipher in self.symetric_ciphers:
 			if cipher in message['algorithms']['symetric_ciphers']:
 				choosen_chipher=cipher
+				break
 		
 		for cipher_mode in self.cipher_modes:
 			if cipher_mode in message['algorithms']['chiper_modes']:
 				choosen_mode=cipher_mode
+				break
 		
+		for digest in self.digest:
+			if digest in message['algorithms']['digest']:
+				choosen_digest=digest
+				break
+		
+		if choosen_chipher is not None and choosen_mode is not None and choosen_digest is not None:
+			self.choosen_cipher=choosen_chipher
+			self.choosen_mode=choosen_mode
+			self.choosen_digest=choosen_digest
+			
+			flag=True
+		else:
+			flag=False
+			return (False,"Client algorithms not compatible with server algorithms")
 
+		if flag:
+			self._send({'type': 'NEGOTIATION_RESPONSE','chosen_algorithms':{'symetric_cipher':self.choosen_cipher,'chiper_mode':self.choosen_mode,'digest':self.choosen_digest}})
+			return (True,None)
 		logger.debug("Choices {} {} {}".format(choosen_chipher,choosen_mode,choosen_digest))
 
 
