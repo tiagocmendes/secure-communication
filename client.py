@@ -69,6 +69,51 @@ class Crypto:
             self.symmetric_key = key[:64]
         
         #return self.symmetric_key
+    
+    def file_encryption(self, file_name):
+        backend = default_backend()
+        cipher = None 
+        block_size = 0
+
+        mode = None
+        if self.cipher_mode == 'EBC':
+            mode = modes.ECB()
+        
+        elif self.cipher_mode == 'CBC':
+            # FIXME initialization vector
+            mode = modes.CBC(b"a" * 16)
+        
+        if self.symmetric_cipher == 'AES':
+            block_size = algorithms.AES(self.symmetric_key).block_size
+            cipher = Cipher(algorithms.AES(self.symmetric_key), mode, backend=backend)
+        
+        elif self.symmetric_cipher == '3DES':
+            block_size = algorithms.TripleDES(self.symmetric_key).block_size
+            cipher = Cipher(algorithms.TripleDES(self.symmetric_key), mode, backend=backend)
+    
+        elif mode == 'ChaCha20':
+            # FIXME block size
+            pass
+            #block_size = algorithms.ChaCha20(self.symmetric_key).block_size
+            #cipher = Cipher(algorithms.ChaCha20(key), mode, backend=backend)
+
+        else:
+            raise Exception("Symmetric cipher not found")
+        
+        data = ''
+        with open(file_name, 'rb') as fr:
+            data = fr.read()
+
+        encryptor = cipher.encryptor()
+        padding = block_size - len(data) % block_size
+        padding = 16 if padding == 0 else padding
+        
+        data += bytes([padding]*padding)
+        criptogram = encryptor.update(data)
+
+        with open(self.encrypted_file_name, 'wb') as fw:
+            fw.write(criptogram)
+
 
 class ClientProtocol(asyncio.Protocol):
     """
