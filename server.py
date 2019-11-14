@@ -6,6 +6,8 @@ import coloredlogs, logging
 import re
 import os
 from aio_tcpserver import tcp_server
+from crypto import Crypto
+
 
 logger = logging.getLogger('root')
 
@@ -36,6 +38,8 @@ class ClientHandler(asyncio.Protocol):
 		self.choosen_cipher=None
 		self.choosen_mode=None
 		self.choosen_digest=None
+		self.crypto = Crypto(self.choosen_cipher, self.choosen_mode, self.choosen_digest)
+
 
 	def connection_made(self, transport) -> None:
 		"""
@@ -102,6 +106,12 @@ class ClientHandler(asyncio.Protocol):
 		elif mtype=='NEGOTIATION':
 			logger.debug('Negotiation received')
 			(ret,error) = self.process_negotiation(message)
+		elif mtype == 'KEY':
+			logger.debug('Key received {}'.format(message['symetric_key']))
+			#ret=True
+			self._send({'type':'KEY_RECEIVED'})
+			ret=True
+
 		elif mtype == 'DATA':
 			ret = self.process_data(message)
 		elif mtype == 'CLOSE':
@@ -148,9 +158,13 @@ class ClientHandler(asyncio.Protocol):
 				break
 		
 		if choosen_chipher is not None and choosen_mode is not None and choosen_digest is not None:
-			self.choosen_cipher=choosen_chipher
-			self.choosen_mode=choosen_mode
-			self.choosen_digest=choosen_digest
+			#self.choosen_cipher=choosen_chipher
+			#self.choosen_mode=choosen_mode
+			#self.choosen_digest=choosen_digest
+
+			self.crypto.symmetric_cipher=choosen_chipher
+			self.crypto.cipher_mode=choosen_mode
+			self.crypto.digest=choosen_digest
 			
 			flag=True
 		else:
@@ -158,7 +172,7 @@ class ClientHandler(asyncio.Protocol):
 			return (False,"Client algorithms not compatible with server algorithms")
 
 		if flag:
-			self._send({'type': 'NEGOTIATION_RESPONSE','chosen_algorithms':{'symetric_cipher':self.choosen_cipher,'chiper_mode':self.choosen_mode,'digest':self.choosen_digest}})
+			self._send({'type': 'NEGOTIATION_RESPONSE','chosen_algorithms':{'symetric_cipher':self.crypto.symmetric_cipher,'chiper_mode':self.crypto.cipher_mode,'digest':self.crypto.digest}})
 			return (True,None)
 		logger.debug("Choices {} {} {}".format(choosen_chipher,choosen_mode,choosen_digest))
 

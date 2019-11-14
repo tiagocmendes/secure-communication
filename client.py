@@ -12,7 +12,6 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from crypto import Crypto
 logger = logging.getLogger('root')
-
 STATE_CONNECT = 0
 STATE_OPEN = 1
 STATE_DATA = 2
@@ -62,7 +61,7 @@ class ClientProtocol(asyncio.Protocol):
         #message = {'type': 'OPEN', 'file_name': self.file_name} 
         self._send(message)
 
-        self.state = STATE_OPEN
+        #self.state = STATE_OPEN # TODO change to another state (STATE_NEGOTIATION)
 
     
 
@@ -102,7 +101,7 @@ class ClientProtocol(asyncio.Protocol):
         :return:
         """
 
-        #logger.debug("Frame: {}".format(frame))
+        logger.debug("Frame: {}".format(frame))
         try:
             message = json.loads(frame)
         except:
@@ -111,7 +110,7 @@ class ClientProtocol(asyncio.Protocol):
             return
 
         mtype = message.get('type', None)
-
+        logger.debug("Type {}".format(mtype))
         if mtype == 'OK':  # Server replied OK. We can advance the state
             if self.state == STATE_OPEN:
                 logger.info("Channel open")
@@ -134,9 +133,28 @@ class ClientProtocol(asyncio.Protocol):
             #Generate a symetric key
             self.crypto.symmetric_key_gen()
             logger.debug("Key: {}".format(self.crypto.symmetric_key))
+            #Encrypt file
+            self.crypto.file_encryption(self.file_name)
+            logger.debug("File encryption done")
+
+            message = {'type':'KEY','symetric_key':str(self.crypto.symmetric_key)}
+            # Send key to server 
+            self._send(message)
+            return
+            
+        
+        elif mtype == 'KEY_RECEIVED':
+            logger.debug("Sending file")
+            message = {'type': 'OPEN', 'file_name': self.crypto.encrypted_file_name} 
+            self._send(message)
+
+            self.state = STATE_OPEN
+            return 
+
+
         else:
             logger.warning("Invalid message type")
-
+        logger.debug('CLosing')
         self.transport.close()
         self.loop.stop()
 

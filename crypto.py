@@ -11,10 +11,6 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-
-​
-
-
 """
 Class with several cryptography functions.
 """
@@ -91,14 +87,18 @@ class Crypto:
             self.symmetric_key = key[:64]
         
         #return self.symmetric_key
+    """
+    File encryption
 
+    @param file_name: file to encrypt
+    
+    """
     def file_encryption(self, file_name):
         backend = default_backend()
         cipher = None 
         block_size = 0
-​
         mode = None
-        if self.cipher_mode == 'EBC':
+        if self.cipher_mode == 'ECB':
             mode = modes.ECB()
         
         elif self.cipher_mode == 'CBC':
@@ -118,20 +118,18 @@ class Crypto:
             pass
             #block_size = algorithms.ChaCha20(self.symmetric_key).block_size
             #cipher = Cipher(algorithms.ChaCha20(key), mode, backend=backend)
-​
         else:
             raise Exception("Symmetric cipher not found")
         
         data = ''
         with open(file_name, 'rb') as fr:
             data = fr.read()
-​
         encryptor = cipher.encryptor()
         padding = block_size - len(data) % block_size
-        padding = 16 if padding == 0 else padding
+        padding = 16 if padding == 0 else padding # TODO change padding depending on symetric_cipher
         
         data += bytes([padding]*padding)
         criptogram = encryptor.update(data)
-​
+
         with open(self.encrypted_file_name, 'wb') as fw:
             fw.write(criptogram)
