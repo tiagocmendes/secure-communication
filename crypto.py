@@ -8,8 +8,10 @@ import getpass
 import binascii
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes 
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import serialization as crypto_serialization
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives.asymmetric import dh
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 """
 Class with several cryptography functions.
@@ -28,8 +30,47 @@ class Crypto:
         self.cipher_mode = cipher_modes
         self.digest = digest
         self.symmetric_key=None
+        self.public_key=None
+        self.private_key=None
+        self.shared_key=None
         self.mac=None
         self.encrypted_file_name="encrypted_file.txt"
+    
+    def diffie_helman_server(self,p,g,y,bytes_public_key):
+        pn = dh.DHParameterNumbers(p, g)
+        parameters = pn.parameters(default_backend())
+        self.private_key = parameters.generate_private_key()
+        
+        peer_public_key=self.private_key.public_key()
+        self.public_key=peer_public_key.public_bytes(crypto_serialization.Encoding.PEM,crypto_serialization.PublicFormat.SubjectPublicKeyInfo)
+        
+
+        public_key_client=crypto_serialization.load_pem_public_key(bytes_public_key,backend=default_backend())
+        self.shared_key=self.private_key.exchange(public_key_client)
+        
+        return True
+
+
+    def create_shared_key(self,bytes_public_key):
+        public_key_server=crypto_serialization.load_pem_public_key(bytes_public_key,backend=default_backend())
+        self.shared_key=self.private_key.exchange(public_key_server)
+
+
+    def diffie_helman_client(self):
+        parameters = dh.generate_parameters(generator=2, key_size=512, backend=default_backend())
+
+        self.private_key = parameters.generate_private_key()
+        a_peer_public_key = self.private_key.public_key()
+        p=parameters.parameter_numbers().p
+        g=parameters.parameter_numbers().g
+        y=a_peer_public_key.public_numbers().y
+
+        self.public_key=a_peer_public_key.public_bytes(crypto_serialization.Encoding.PEM,crypto_serialization.PublicFormat.SubjectPublicKeyInfo)
+
+        return(self.public_key,p,g,y)
+        
+    
+
     
     def digest_gen(self):
 
@@ -57,27 +98,20 @@ class Crypto:
     """
     Symmetric key generation.
 
-    It prompts the user to enter a password.
+    It derivates the shared key created with Diffie-Helman
     """
     def symmetric_key_gen(self):
         
-        try:
-            password = getpass.getpass(prompt='Password for key: ', stream=None)
-        except Exception as error:
-            print('ERROR', error)
-        
-        password = password.encode()
-        salt = os.urandom(16)
-
-        kdf = PBKDF2HMAC(
+       
+        kdf = HKDF(
             algorithm=hashes.SHA256(),
             length=32,
-            salt=salt,
-            iterations=100000,
+            salt=None,
+            info=b'handshake data',
             backend=default_backend()
         )
         
-        key = kdf.derive(password)
+        key = kdf.derive(self.shared_key)
 
         if self.symmetric_cipher == 'AES':
             self.symmetric_key = key[:16]
@@ -86,7 +120,6 @@ class Crypto:
         elif self.symmetric_cipher == 'ChaCha20':
             self.symmetric_key = key[:64]
         
-        #return self.symmetric_key
     """
     File encryption
 

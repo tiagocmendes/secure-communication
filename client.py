@@ -125,21 +125,28 @@ class ClientProtocol(asyncio.Protocol):
         elif mtype == 'ERROR':
             logger.warning("Got error from server: {}".format(message.get('data', None)))
             
+        elif mtype == 'DH_PARAMETERS_RESPONSE':
+            logger.debug('DH_PARAMETERS_RESPONSE')
+            public_key=bytes(message['parameters']['public_key'],'ISO-8859-1')
+            #Create shared key with the server public key
+            self.crypto.create_shared_key(public_key)
+            
+            #Generate a symetric key
+            self.crypto.symmetric_key_gen()
+            logger.debug("Key: {}".format(self.crypto.symmetric_key))
+            return
 
         elif mtype == 'NEGOTIATION_RESPONSE':
             logger.info("Negotiation response")
             #Receive the choosen algorithms by the server 
             self.process_negotiation_response(message)
-            #Generate a symetric key
-            self.crypto.symmetric_key_gen()
-            logger.debug("Key: {}".format(self.crypto.symmetric_key))
-            #Encrypt file
-            self.crypto.file_encryption(self.file_name)
-            logger.debug("File encryption done")
-
-            message = {'type':'KEY','symetric_key':str(self.crypto.symmetric_key)}
-            # Send key to server 
+            #Generate Diffie Helman client private and public keys
+            bytes_public_key,p,g,y=self.crypto.diffie_helman_client()
+            
+            
+            message={'type':'DH_PARAMETERS','parameters':{'p':p,'g':g,'y':y,'public_key':str(bytes_public_key,'ISO-8859-1')}}
             self._send(message)
+            
             return
             
         

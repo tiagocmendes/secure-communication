@@ -106,6 +106,17 @@ class ClientHandler(asyncio.Protocol):
 		elif mtype=='NEGOTIATION':
 			logger.debug('Negotiation received')
 			(ret,error) = self.process_negotiation(message)
+		elif mtype=='DH_PARAMETERS':
+			logger.debug('DH RECEIVED')
+			ret=self.process_dh_parameters(message)
+
+			#Generate a symetric key
+			self.crypto.symmetric_key_gen()
+			logger.debug("Key: {}".format(self.crypto.symmetric_key))
+
+			message={'type':'DH_PARAMETERS_RESPONSE','parameters':{'public_key':str(self.crypto.public_key,'ISO-8859-1')}}
+			self._send(message)
+
 		elif mtype == 'KEY':
 			logger.debug('Key received {}'.format(message['symetric_key']))
 			#ret=True
@@ -134,7 +145,20 @@ class ClientHandler(asyncio.Protocol):
 			self.state = STATE_CLOSE
 			self.transport.close()
 
+	def process_dh_parameters(self,message: str) -> bool:
+		logger.debug("Process DH parameters: {}".format(message))
 
+		y=message['parameters']['y']
+		g=message['parameters']['g']
+		p=message['parameters']['p']
+		bytes_public_key=bytes(message['parameters']['public_key'],'ISO-8859-1')
+
+		try:
+			ret=self.crypto.diffie_helman_server(p,g,y,bytes_public_key)
+			return ret
+		except :
+			return False
+			
 	def process_negotiation(self,message: str) -> bool:
 		logger.debug("Process Negotiation: {}".format(message))
 		choosen_chipher=None
