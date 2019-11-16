@@ -43,6 +43,8 @@ class ClientProtocol(asyncio.Protocol):
 
         self.crypto = Crypto(self.choosen_cipher, self.choosen_mode, self.choosen_digest)
 
+        self.encrypted_data = ''
+
     def connection_made(self, transport) -> None:
         """
         Called when the client connects.
@@ -134,6 +136,10 @@ class ClientProtocol(asyncio.Protocol):
             #Generate a symetric key
             self.crypto.symmetric_key_gen()
             logger.debug("Key: {}".format(self.crypto.symmetric_key))
+            message = {'type': 'OPEN', 'file_name': self.file_name} 
+            self._send(message)
+
+            self.state = STATE_OPEN
             return
 
         elif mtype == 'NEGOTIATION_RESPONSE':
@@ -198,9 +204,13 @@ class ClientProtocol(asyncio.Protocol):
             read_size = 16 * 60 #TODO read_size depends on the alg you are using, AES=16*60, 3DES=8*60, but maybe we dont have to change because the encrypt already deals with that
             while True:
                 # TODO Implement encrypt here
-                #TODO save the encrypted text in a var so we can use it later do create mac 
+                # TODO save the encrypted text in a var so we can use it later do create mac 
                 data = f.read(16 * 60)
-                message['data'] = base64.b64encode(data).decode()
+                
+                criptogram = self.crypto.file_encryption(data)
+                message['data'] = base64.b64encode(criptogram).decode()
+                print(message['data'])
+                self.encrypted_data += message['data']
                 self._send(message)
 
                 if len(data) != read_size:
