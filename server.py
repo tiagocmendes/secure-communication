@@ -42,6 +42,8 @@ class ClientHandler(asyncio.Protocol):
 
 		self.encrypted_data = ''
 
+		self.decrypted_data = b''
+
 	def connection_made(self, transport) -> None:
 		"""
 		Called when a client connects
@@ -258,8 +260,8 @@ class ClientHandler(asyncio.Protocol):
 
 		self.encrypted_data += message['data']
 
-		print(self.crypto.decryption(base64.b64decode(message['data'].encode())))
-
+		self.decrypted_data += self.crypto.decryption(base64.b64decode(message['data'].encode()))
+	
 		if self.state == STATE_OPEN:
 			self.state = STATE_DATA
 			# First Packet
