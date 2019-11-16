@@ -149,11 +149,12 @@ class Crypto:
     @param file_name: file to encrypt
     
     """
-    def file_encryption(self, file_name):
+    def file_encryption(self, data):
         backend = default_backend()
         cipher = None 
         block_size = 0
         mode = None
+        
         if self.cipher_mode == 'ECB':
             mode = modes.ECB()
         
@@ -177,11 +178,12 @@ class Crypto:
         else:
             raise Exception("Symmetric cipher not found")
         
-        data = ''
-        with open(file_name, 'rb') as fr:
-            data = fr.read()
+        #data = ''
+        #with open(file_name, 'rb') as fr:
+            #data = fr.read()
         encryptor = cipher.encryptor()
         padding = block_size - len(data) % block_size
+
         #TODO Check if paddings are correct
         padding = 16 if padding and self.symmetric_cipher == 'AES' == 0 else padding 
         padding = 8 if padding and self.symmetric_cipher == '3DES' == 0 else padding 
@@ -189,7 +191,7 @@ class Crypto:
 
         data += bytes([padding]*padding)
         criptogram = encryptor.update(data)
+        return criptogram
 
-        with open(self.encrypted_file_name, 'wb') as fw:
-            fw.write(criptogram)
-            return fw
+        #with open(self.encrypted_file_name, 'wb') as fw:
+        #    fw.write(criptogram)

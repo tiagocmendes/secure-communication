@@ -278,6 +278,7 @@ class ClientHandler(asyncio.Protocol):
 			return False
 
 		try:
+			# TODO: here we need to check the MAC and decrypt the message
 			self.file.write(bdata)
 			self.file.flush()
 		except:
