@@ -85,7 +85,7 @@ class Crypto:
         
         
        
-        h.update(my_text)
+        h.update(my_text) # TODO read 1024 
             
         
         self.mac=binascii.hexlify(h.finalize()) 
@@ -124,7 +124,7 @@ class Crypto:
         
        
         kdf = HKDF(
-            algorithm=hashes.SHA256(),
+            algorithm=hashes.SHA256(), #TODO dynamic
             length=32,
             salt=None,
             info=b'handshake data',

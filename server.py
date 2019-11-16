@@ -15,6 +15,9 @@ STATE_CONNECT = 0
 STATE_OPEN = 1
 STATE_DATA = 2
 STATE_CLOSE= 3
+#negoviaçao
+#dh
+#
 
 #GLOBAL
 storage_dir = 'files'
@@ -108,9 +111,8 @@ class ClientHandler(asyncio.Protocol):
 		if mtype == 'OPEN':
 			ret = self.process_open(message)
 		elif mtype=='MAC':
-			#logger.debug('MAC received')
-			#logger.debug("Message: {}".format(message['data']))
-			ret= self.process_mac(message)
+			
+			(ret,error)= self.process_mac(message)
 			if ret:
 				message={'type':'INTEGRITY_CONTROL','data':'True'}
 				self._send(message)
@@ -168,7 +170,9 @@ class ClientHandler(asyncio.Protocol):
 
 		if client_mac==self.crypto.mac:
 			logger.info("Integrity controll: Success")
-		return True
+			return (True,None)
+		else:
+			return (False,'Integrity control failed.')
 		
 	
 	def process_dh_parameters(self,message: str) -> bool:
@@ -256,7 +260,7 @@ class ClientHandler(asyncio.Protocol):
 				return False
 
 		try:
-			self.file = open(file_path, "wb")
+			self.file = open(file_path, "wb") #TODO append bytes
 			logger.info("File open")
 		except Exception:
 			logger.exception("Unable to open file")
