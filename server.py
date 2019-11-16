@@ -40,6 +40,7 @@ class ClientHandler(asyncio.Protocol):
 		self.choosen_digest=None
 		self.crypto = Crypto(self.choosen_cipher, self.choosen_mode, self.choosen_digest)
 
+		self.encrypted_data = b''
 
 	def connection_made(self, transport) -> None:
 		"""
@@ -63,6 +64,10 @@ class ClientHandler(asyncio.Protocol):
         :return:
         """
 		logger.debug('Received: {}'.format(data))
+
+		# criptogram variable
+		self.encrypted_data += data
+
 		try:
 			self.buffer += data.decode()
 		except:
