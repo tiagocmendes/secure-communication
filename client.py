@@ -134,6 +134,10 @@ class ClientProtocol(asyncio.Protocol):
             #Generate a symetric key
             self.crypto.symmetric_key_gen()
             logger.debug("Key: {}".format(self.crypto.symmetric_key))
+            message = {'type': 'OPEN', 'file_name': self.file_name} 
+            self._send(message)
+
+            self.state = STATE_OPEN
             return
 
         elif mtype == 'NEGOTIATION_RESPONSE':
@@ -193,7 +197,9 @@ class ClientProtocol(asyncio.Protocol):
         :return:  None
         """
 
-        with open(file_name, 'rb') as f:
+        encrypted_file = self.crypto.file_encryption(file_name)
+
+        with open(encrypted_file, 'rb') as f:
             message = {'type': 'DATA', 'data': None}
             read_size = 16 * 60 #TODO read_size depends on the alg you are using, AES=16*60, 3DES=8*60, but maybe we dont have to change because the encrypt already deals with that
             while True:

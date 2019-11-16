@@ -164,11 +164,9 @@ class Crypto:
         padding = 8 if padding and self.symmetric_cipher == '3DES' == 0 else padding 
         padding = 64 if padding and self.symmetric_cipher == 'ChaCha20' == 0 else padding 
 
-        
-
-        
         data += bytes([padding]*padding)
         criptogram = encryptor.update(data)
 
         with open(self.encrypted_file_name, 'wb') as fw:
             fw.write(criptogram)
+            return fw
