@@ -159,7 +159,13 @@ class Crypto:
             data = fr.read()
         encryptor = cipher.encryptor()
         padding = block_size - len(data) % block_size
-        padding = 16 if padding == 0 else padding # TODO change padding depending on symetric_cipher
+        #TODO Check if paddings are correct
+        padding = 16 if padding and self.symmetric_cipher == 'AES' == 0 else padding 
+        padding = 8 if padding and self.symmetric_cipher == '3DES' == 0 else padding 
+        padding = 64 if padding and self.symmetric_cipher == 'ChaCha20' == 0 else padding 
+
+        
+
         
         data += bytes([padding]*padding)
         criptogram = encryptor.update(data)
