@@ -198,6 +198,7 @@ class ClientProtocol(asyncio.Protocol):
             read_size = 16 * 60 #TODO read_size depends on the alg you are using, AES=16*60, 3DES=8*60, but maybe we dont have to change because the encrypt already deals with that
             while True:
                 # TODO Implement encrypt here
+                #TODO save the encrypted text in a var so we can use it later do create mac 
                 data = f.read(16 * 60)
                 message['data'] = base64.b64encode(data).decode()
                 self._send(message)
