@@ -195,3 +195,41 @@ class Crypto:
 
         #with open(self.encrypted_file_name, 'wb') as fw:
         #    fw.write(criptogram)
+
+    def decryption(self, data):
+        backend = default_backend() 
+        cipher = None
+        block_size = 0
+
+        if self.cipher_mode == 'ECB':
+            mode = modes.ECB()
+        
+        elif self.cipher_mode == 'CBC':
+            # FIXME initialization vector
+            mode = modes.CBC(b"a" * 16)
+
+        if self.symmetric_cipher == 'AES':
+            block_size = algorithms.AES(self.symmetric_key).block_size
+            cipher = Cipher(algorithms.AES(self.symmetric_key), mode, backend=backend)
+        elif self.symmetric_cipher == '3DES':
+            block_size = algorithms.TripleDES(self.symmetric_key).block_size
+            cipher = Cipher(algorithms.TripleDES(self.symmetric_key), mode, backend=backend)
+        elif self.symmetric_cipher == 'ChaCha20':
+            pass
+            # block_size = algorithms.ChaCha20(key).block_size
+            # cipher = Cipher(algorithms.ChaCha20(key), modes.ECB(), backend=backend)
+        else:
+            raise Exception("Mode not found")
+            
+        decryptor = cipher.decryptor()
+
+        padding = block_size - len(data) % block_size
+
+        #TODO Check if paddings are correct
+        padding = 16 if padding and self.symmetric_cipher == 'AES' == 0 else padding 
+        padding = 8 if padding and self.symmetric_cipher == '3DES' == 0 else padding 
+        padding = 64 if padding and self.symmetric_cipher == 'ChaCha20' == 0 else padding 
+
+        data += bytes([padding]*padding)
+        ct = decryptor.update(data)+decryptor.finalize()
+        return ct[:-ct[-1]]

@@ -209,12 +209,13 @@ class ClientProtocol(asyncio.Protocol):
                 
                 criptogram = self.crypto.file_encryption(data)
                 message['data'] = base64.b64encode(criptogram).decode()
+                print(message['data'])
                 self.encrypted_data += message['data']
                 self._send(message)
 
                 if len(data) != read_size:
                     break
-                
+
             self._send({'type': 'CLOSE'})
             logger.info("File transferred. Closing transport")
             self.transport.close()

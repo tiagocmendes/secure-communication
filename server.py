@@ -258,6 +258,8 @@ class ClientHandler(asyncio.Protocol):
 
 		self.encrypted_data += message['data']
 
+		print(self.crypto.decryption(base64.b64decode(message['data'].encode())))
+
 		if self.state == STATE_OPEN:
 			self.state = STATE_DATA
 			# First Packet
