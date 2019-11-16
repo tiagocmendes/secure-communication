@@ -52,7 +52,7 @@ class Crypto:
                 digest_generated.update(my_text)
                 
       
-        self.mac=binascii.hexlify(digest.finalize())
+        self.mic=binascii.hexlify(digest.finalize()) # TODO Create MAC
     
     """
     Symmetric key generation.

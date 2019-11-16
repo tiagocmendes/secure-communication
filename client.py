@@ -188,8 +188,9 @@ class ClientProtocol(asyncio.Protocol):
 
         with open(file_name, 'rb') as f:
             message = {'type': 'DATA', 'data': None}
-            read_size = 16 * 60
+            read_size = 16 * 60 #TODO read_size depends on the alg you are using, AES=16*60, 3DES=8*60, but maybe we dont have to change because the encrypt already deals with that
             while True:
+                # TODO Implement encrypt here
                 data = f.read(16 * 60)
                 message['data'] = base64.b64encode(data).decode()
                 self._send(message)
