@@ -107,6 +107,14 @@ class ClientHandler(asyncio.Protocol):
 		error=None
 		if mtype == 'OPEN':
 			ret = self.process_open(message)
+		elif mtype=='MAC':
+			#logger.debug('MAC received')
+			#logger.debug("Message: {}".format(message['data']))
+			ret= self.process_mac(message)
+			if ret:
+				message={'type':'INTEGRITY_CONTROL','data':'True'}
+				self._send(message)
+
 		elif mtype=='NEGOTIATION':
 			logger.debug('Negotiation received')
 			(ret,error) = self.process_negotiation(message)
@@ -149,6 +157,20 @@ class ClientHandler(asyncio.Protocol):
 			self.state = STATE_CLOSE
 			self.transport.close()
 
+	def process_mac(self,message: str) -> bool:
+		logger.debug("Process MAC: {}".format(message))
+
+		client_mac=base64.b64decode(message['data'])
+		#Generate server MAC
+		self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
+		logger.debug("Client mac: {}".format(base64.b64decode(client_mac)))
+		logger.debug("Server mac: {}".format(self.crypto.mac))
+
+		if client_mac==self.crypto.mac:
+			logger.info("Integrity controll: Success")
+		return True
+		
+	
 	def process_dh_parameters(self,message: str) -> bool:
 		logger.debug("Process DH parameters: {}".format(message))
 
@@ -305,7 +327,9 @@ class ClientHandler(asyncio.Protocol):
 		:return: Boolean indicating the success of the operation
 		"""
 		logger.debug("Process Close: {}".format(message))
-		
+		logger.debug("Message received: {}".format(str(self.decrypted_data)))
+		self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
+		logger.debug("My MAC: {}".format(self.crypto.mac))
 		self.transport.close()
 		if self.file is not None:
 			self.file.close()

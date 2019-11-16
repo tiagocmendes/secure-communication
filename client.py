@@ -126,7 +126,15 @@ class ClientProtocol(asyncio.Protocol):
 
         elif mtype == 'ERROR':
             logger.warning("Got error from server: {}".format(message.get('data', None)))
-            
+
+        elif mtype=='INTEGRITY_CONTROL':
+            flag=message['data']
+            if flag=='True':
+                self._send({'type': 'CLOSE'})
+                logger.info("File transferred. Closing transport")
+                self.transport.close()
+
+        
         elif mtype == 'DH_PARAMETERS_RESPONSE':
             logger.debug('DH_PARAMETERS_RESPONSE')
             public_key=bytes(message['parameters']['public_key'],'ISO-8859-1')
@@ -201,6 +209,7 @@ class ClientProtocol(asyncio.Protocol):
 
         with open(file_name, 'rb') as f:
             message = {'type': 'DATA', 'data': None}
+            file_ended=False
             read_size = 16 * 60 #TODO read_size depends on the alg you are using, AES=16*60, 3DES=8*60, but maybe we dont have to change because the encrypt already deals with that
             while True:
                 # TODO Implement encrypt here
@@ -214,11 +223,22 @@ class ClientProtocol(asyncio.Protocol):
                 self._send(message)
 
                 if len(data) != read_size:
+                    file_ended=True
                     break
+            
+            #WHen it ends create MAC
+            if file_ended:
+                self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
+                logger.debug("My MAC: {}".format(self.crypto.mac))
+                message = {'type': 'MAC', 'data': base64.b64encode(self.crypto.mac).decode()}
+                self._send(message)
 
+
+            '''
             self._send({'type': 'CLOSE'})
             logger.info("File transferred. Closing transport")
             self.transport.close()
+            '''
 
     def _send(self, message: str) -> None:
         """

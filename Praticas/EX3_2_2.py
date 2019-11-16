@@ -24,7 +24,7 @@ def symmetric_key_gen(key, original_file_name,destiny_file_name, mode, algorithm
         raise Exception("Mode not found")
     text=''
     
-    with open(file_name,"rb") as fr:
+    with open(original_file_name,"rb") as fr:
         text=fr.read()
 		
     encryptor = cipher.encryptor()
@@ -36,7 +36,7 @@ def symmetric_key_gen(key, original_file_name,destiny_file_name, mode, algorithm
     with open(destiny_file_name, "wb") as f:
         f.write(ct)
     
-    #return ct
+    return ct
 
 
 def symmetric_key_decrypt(key, text, mode, algorithm=None):
@@ -63,12 +63,12 @@ def symmetric_key_decrypt(key, text, mode, algorithm=None):
 
 # Ler a key do ficheiro gerado anteriormente
 key = os.urandom(32)
-symmetric_key_gen(key, "file_to_encrypt.txt", "AES")
-'''print(encrypted)
+encrypted=symmetric_key_gen(key,"text.txt","file_to_encrypt.txt", "AES")
+print(encrypted)
 decrypted = symmetric_key_decrypt(key, encrypted, "AES")
 print(decrypted)
 
-
+'''
 key = os.urandom(8)
 encrypted2 = symmetric_key_gen(key, b"ola2", "3DES")
 print(encrypted2)

@@ -69,7 +69,7 @@ class Crypto:
 
         return(self.public_key,p,g,y)
         
-    def mac_gen (self):
+    def mac_gen (self,my_text):
 
         if(self.digest=="SHA256"):
             h=hmac.HMAC(self.shared_key, hashes.SHA256(), backend=default_backend())
@@ -84,12 +84,9 @@ class Crypto:
 
         
         
-        with open(self.encrypted_file_name,"rb") as fr:
-            my_text=fr.read(1024)
-            digest_generated.update(my_text)
-            while my_text:
-                my_text=fr.read(1024)
-                digest_generated.update(my_text)
+       
+        h.update(my_text)
+            
         
         self.mac=binascii.hexlify(h.finalize()) 
 
@@ -226,10 +223,12 @@ class Crypto:
         padding = block_size - len(data) % block_size
 
         #TODO Check if paddings are correct
+        '''
         padding = 16 if padding and self.symmetric_cipher == 'AES' == 0 else padding 
         padding = 8 if padding and self.symmetric_cipher == '3DES' == 0 else padding 
         padding = 64 if padding and self.symmetric_cipher == 'ChaCha20' == 0 else padding 
-
-        data += bytes([padding]*padding)
+        '''
+    
+        #data += bytes([padding]*padding)
         ct = decryptor.update(data)+decryptor.finalize()
         return ct[:-ct[-1]]
