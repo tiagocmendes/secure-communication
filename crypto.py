@@ -7,7 +7,7 @@ import os
 import getpass
 import binascii
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes 
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives import serialization as crypto_serialization
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import dh
@@ -69,7 +69,30 @@ class Crypto:
 
         return(self.public_key,p,g,y)
         
-    
+    def mac_gen (self):
+
+        if(self.digest=="SHA256"):
+            h=hmac.HMAC(self.shared_key, hashes.SHA256(), backend=default_backend())
+        elif(self.digest=="SHA384"):
+            h=hmac.HMAC(self.shared_key, hashes.SHA384(), backend=default_backend())
+        elif(self.digest=="MD5"):
+            h=hmac.HMAC(self.shared_key, hashes.MD5(), backend=default_backend())
+        elif(self.digest=="SHA512"):
+            h=hmac.HMAC(self.shared_key, hashes.SHA512(), backend=default_backend())
+        elif(self.digest=="BLAKE2"):
+            h=hmac.HMAC(self.shared_key, hashes.BLAKE2b(64), backend=default_backend())
+
+        
+        
+        with open(self.encrypted_file_name,"rb") as fr:
+            my_text=fr.read(1024)
+            digest_generated.update(my_text)
+            while my_text:
+                my_text=fr.read(1024)
+                digest_generated.update(my_text)
+        
+        self.mac=binascii.hexlify(h.finalize()) 
+
 
     
     def digest_gen(self):
