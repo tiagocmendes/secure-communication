@@ -40,7 +40,7 @@ class ClientHandler(asyncio.Protocol):
 		self.choosen_digest=None
 		self.crypto = Crypto(self.choosen_cipher, self.choosen_mode, self.choosen_digest)
 
-		self.encrypted_data = b''
+		self.encrypted_data = ''
 
 	def connection_made(self, transport) -> None:
 		"""
@@ -64,9 +64,6 @@ class ClientHandler(asyncio.Protocol):
         :return:
         """
 		logger.debug('Received: {}'.format(data))
-
-		# criptogram variable
-		self.encrypted_data += data
 
 		try:
 			self.buffer += data.decode()
@@ -259,6 +256,8 @@ class ClientHandler(asyncio.Protocol):
 		"""
 		logger.debug("Process Data: {}".format(message))
 
+		self.encrypted_data += message['data']
+
 		if self.state == STATE_OPEN:
 			self.state = STATE_DATA
 			# First Packet
@@ -283,7 +282,7 @@ class ClientHandler(asyncio.Protocol):
 			return False
 
 		try:
-			# TODO: here we need to check the MAC and decrypt the message
+			
 			self.file.write(bdata)
 			self.file.flush()
 		except:
@@ -302,14 +301,13 @@ class ClientHandler(asyncio.Protocol):
 		:return: Boolean indicating the success of the operation
 		"""
 		logger.debug("Process Close: {}".format(message))
-
+		
 		self.transport.close()
 		if self.file is not None:
 			self.file.close()
 			self.file = None
 
 		self.state = STATE_CLOSE
-
 		return True
 
 

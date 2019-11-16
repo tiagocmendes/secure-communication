@@ -43,7 +43,7 @@ class ClientProtocol(asyncio.Protocol):
 
         self.crypto = Crypto(self.choosen_cipher, self.choosen_mode, self.choosen_digest)
 
-        self.encrypted_data = b''
+        self.encrypted_data = ''
 
     def connection_made(self, transport) -> None:
         """
@@ -206,14 +206,15 @@ class ClientProtocol(asyncio.Protocol):
                 # TODO Implement encrypt here
                 # TODO save the encrypted text in a var so we can use it later do create mac 
                 data = f.read(16 * 60)
+                
                 criptogram = self.crypto.file_encryption(data)
-                self.encrypted_data += criptogram
                 message['data'] = base64.b64encode(criptogram).decode()
+                self.encrypted_data += message['data']
                 self._send(message)
 
                 if len(data) != read_size:
                     break
-
+                
             self._send({'type': 'CLOSE'})
             logger.info("File transferred. Closing transport")
             self.transport.close()
