@@ -1,0 +1,142 @@
+\hypertarget{classclient_1_1ClientProtocol}{}\section{client.\+Client\+Protocol Class Reference}
+\label{classclient_1_1ClientProtocol}\index{client.\+Client\+Protocol@{client.\+Client\+Protocol}}
+
+
+Inheritance diagram for client.\+Client\+Protocol\+:
+% FIG 0
+
+
+Collaboration diagram for client.\+Client\+Protocol\+:
+% FIG 1
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+def \hyperlink{classclient_1_1ClientProtocol_ab1e96dfebd671cc4dc2f5477bd932bb8}{\+\_\+\+\_\+init\+\_\+\+\_\+} (self, file\+\_\+name, loop)
+\item 
+def \hyperlink{classclient_1_1ClientProtocol_a858120d4cb2cf64d70c0abd4b3b2b901}{encrypt\+\_\+payload} (self, message)
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_a3a8f60f3f3c9b4d92346bc1c42a95428}\label{classclient_1_1ClientProtocol_a3a8f60f3f3c9b4d92346bc1c42a95428}} 
+def {\bfseries send\+\_\+mac} (self)
+\item 
+def \hyperlink{classclient_1_1ClientProtocol_a11243ab1808bee071956659ad5ace638}{connection\+\_\+made} (self, transport)
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_a9fddf6adfb737c8d32bee7536cb6edef}\label{classclient_1_1ClientProtocol_a9fddf6adfb737c8d32bee7536cb6edef}} 
+def {\bfseries data\+\_\+received}
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_a598301c4a8bb87fa8f0d9bc788d12997}\label{classclient_1_1ClientProtocol_a598301c4a8bb87fa8f0d9bc788d12997}} 
+def {\bfseries on\+\_\+frame}
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_a4498e5816b5b4b210b1d53249beb6756}\label{classclient_1_1ClientProtocol_a4498e5816b5b4b210b1d53249beb6756}} 
+def {\bfseries process\+\_\+negotiation\+\_\+response}
+\item 
+def \hyperlink{classclient_1_1ClientProtocol_a8fe9b98ec37bb2a54651f4d66f27d757}{connection\+\_\+lost} (self, exc)
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_a44c9d0d45e09b270aa21a6c478a93d33}\label{classclient_1_1ClientProtocol_a44c9d0d45e09b270aa21a6c478a93d33}} 
+def {\bfseries send\+\_\+file}
+\end{DoxyCompactItemize}
+\subsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_ace7504f77dda2b2a2ebb500258000ca6}\label{classclient_1_1ClientProtocol_ace7504f77dda2b2a2ebb500258000ca6}} 
+{\bfseries file\+\_\+name}
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_a2edd858bb9c53958e837b4afa8397cdf}\label{classclient_1_1ClientProtocol_a2edd858bb9c53958e837b4afa8397cdf}} 
+{\bfseries loop}
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_af37b07acc0f3024181ae239a8b4e38f8}\label{classclient_1_1ClientProtocol_af37b07acc0f3024181ae239a8b4e38f8}} 
+{\bfseries chunk\+\_\+count}
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_a4b1f7223063d9a674e54da40b31dcc04}\label{classclient_1_1ClientProtocol_a4b1f7223063d9a674e54da40b31dcc04}} 
+{\bfseries last\+\_\+pos}
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_a53447d5a5d3f7ec6e7a2ccfbe43f23df}\label{classclient_1_1ClientProtocol_a53447d5a5d3f7ec6e7a2ccfbe43f23df}} 
+{\bfseries symetric\+\_\+ciphers}
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_a0c42e43f2619a04c8ea5c6c6ba47c7da}\label{classclient_1_1ClientProtocol_a0c42e43f2619a04c8ea5c6c6ba47c7da}} 
+{\bfseries cipher\+\_\+modes}
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_aa32a3f68f77463118355d766364eb502}\label{classclient_1_1ClientProtocol_aa32a3f68f77463118355d766364eb502}} 
+{\bfseries digest}
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_abc858702797ece9cdf47f8ae6bf70164}\label{classclient_1_1ClientProtocol_abc858702797ece9cdf47f8ae6bf70164}} 
+{\bfseries state}
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_a31bf245d67a00a27e9be412824f352cf}\label{classclient_1_1ClientProtocol_a31bf245d67a00a27e9be412824f352cf}} 
+{\bfseries buffer}
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_a7cf1dece06a12f8a8a5eeb70c0d20c23}\label{classclient_1_1ClientProtocol_a7cf1dece06a12f8a8a5eeb70c0d20c23}} 
+{\bfseries choosen\+\_\+cipher}
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_af7ffc23dcb3b1b766cb4a011248216ad}\label{classclient_1_1ClientProtocol_af7ffc23dcb3b1b766cb4a011248216ad}} 
+{\bfseries choosen\+\_\+mode}
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_a55f38e740c5690592ab40590598f7419}\label{classclient_1_1ClientProtocol_a55f38e740c5690592ab40590598f7419}} 
+{\bfseries choosen\+\_\+digest}
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_ad9ea54347c2869628352523c0e707f94}\label{classclient_1_1ClientProtocol_ad9ea54347c2869628352523c0e707f94}} 
+{\bfseries crypto}
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_aed83df6fa52c344a8764c1c84f0d3fa4}\label{classclient_1_1ClientProtocol_aed83df6fa52c344a8764c1c84f0d3fa4}} 
+{\bfseries encrypted\+\_\+data}
+\item 
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_a013d753391e4605b94d510c946130290}\label{classclient_1_1ClientProtocol_a013d753391e4605b94d510c946130290}} 
+{\bfseries transport}
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+\begin{DoxyVerb}Client that handles a single client
+\end{DoxyVerb}
+ 
+
+\subsection{Constructor \& Destructor Documentation}
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_ab1e96dfebd671cc4dc2f5477bd932bb8}\label{classclient_1_1ClientProtocol_ab1e96dfebd671cc4dc2f5477bd932bb8}} 
+\index{client\+::\+Client\+Protocol@{client\+::\+Client\+Protocol}!\+\_\+\+\_\+init\+\_\+\+\_\+@{\+\_\+\+\_\+init\+\_\+\+\_\+}}
+\index{\+\_\+\+\_\+init\+\_\+\+\_\+@{\+\_\+\+\_\+init\+\_\+\+\_\+}!client\+::\+Client\+Protocol@{client\+::\+Client\+Protocol}}
+\subsubsection{\texorpdfstring{\+\_\+\+\_\+init\+\_\+\+\_\+()}{\_\_init\_\_()}}
+{\footnotesize\ttfamily def client.\+Client\+Protocol.\+\_\+\+\_\+init\+\_\+\+\_\+ (\begin{DoxyParamCaption}\item[{}]{self,  }\item[{}]{file\+\_\+name,  }\item[{}]{loop }\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}Default constructor
+
+@param file_name: Name of the file to send
+@param loop: Asyncio Loop to use
+\end{DoxyVerb}
+ 
+
+\subsection{Member Function Documentation}
+\mbox{\Hypertarget{classclient_1_1ClientProtocol_a8fe9b98ec37bb2a54651f4d66f27d757}\label{classclient_1_1ClientProtocol_a8fe9b98ec37bb2a54651f4d66f27d757}} 
+\index{client\+::\+Client\+Protocol@{client\+::\+Client\+Protocol}!connection\+\_\+lost@{connection\+\_\+lost}}
+\index{connection\+\_\+lost@{connection\+\_\+lost}!client\+::\+Client\+Protocol@{client\+::\+Client\+Protocol}}
+\subsubsection{\texorpdfstring{connection\+\_\+lost()}{connection\_lost()}}
+{\footnotesize\ttfamily def client.\+Client\+Protocol.\+connection\+\_\+lost (\begin{DoxyParamCaption}\item[{}]{self,  }\item[{}]{exc }\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}Connection was lost for some reason.
+:param exc:
+:return:
+\end{DoxyVerb}
+ \mbox{\Hypertarget{classclient_1_1ClientProtocol_a11243ab1808bee071956659ad5ace638}\label{classclient_1_1ClientProtocol_a11243ab1808bee071956659ad5ace638}} 
+\index{client\+::\+Client\+Protocol@{client\+::\+Client\+Protocol}!connection\+\_\+made@{connection\+\_\+made}}
+\index{connection\+\_\+made@{connection\+\_\+made}!client\+::\+Client\+Protocol@{client\+::\+Client\+Protocol}}
+\subsubsection{\texorpdfstring{connection\+\_\+made()}{connection\_made()}}
+{\footnotesize\ttfamily def client.\+Client\+Protocol.\+connection\+\_\+made (\begin{DoxyParamCaption}\item[{}]{self,  }\item[{}]{transport,  }\item[{}]{None }\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}Called when the client connects.
+
+:param transport: The transport stream to use for this client
+:return: No return
+\end{DoxyVerb}
+ \mbox{\Hypertarget{classclient_1_1ClientProtocol_a858120d4cb2cf64d70c0abd4b3b2b901}\label{classclient_1_1ClientProtocol_a858120d4cb2cf64d70c0abd4b3b2b901}} 
+\index{client\+::\+Client\+Protocol@{client\+::\+Client\+Protocol}!encrypt\+\_\+payload@{encrypt\+\_\+payload}}
+\index{encrypt\+\_\+payload@{encrypt\+\_\+payload}!client\+::\+Client\+Protocol@{client\+::\+Client\+Protocol}}
+\subsubsection{\texorpdfstring{encrypt\+\_\+payload()}{encrypt\_payload()}}
+{\footnotesize\ttfamily def client.\+Client\+Protocol.\+encrypt\+\_\+payload (\begin{DoxyParamCaption}\item[{}]{self,  }\item[{}]{message }\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}Called when a secure message will be sent, in order to encrypt its payload.
+
+@param message: JSON message of type OPEN, DATA and CLOSE
+\end{DoxyVerb}
+ 
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+client.\+py\end{DoxyCompactItemize}

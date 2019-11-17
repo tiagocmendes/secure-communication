@@ -1,0 +1,49 @@
+{\bfseries Universidade de Aveiro} Segurança Informática e Nas Organizações 2019/2020
+
+{\bfseries Trabalho realizado por\+:}
+
+
+\begin{DoxyItemize}
+\item 88808 -\/ João Miguel Nunes de Medeiros e Vasconcelos
+\item 88886 -\/ Tiago Carvalho Mendes
+\end{DoxyItemize}
+
+{\bfseries Novembro de 2019}
+
+\subsection*{$\ast$$\ast$1. Introdução$\ast$$\ast$}
+
+O presente documento tem como principal objetivo descrever detalhadamente a solução desenvolvida tendo em conta os objetivos propostos para o segundo projeto da unidade curricular de \href{https://www.ua.pt/pt/uc/4143}{\tt Segurança Informática e Nas Organizações} da \href{www.ua.pt}{\tt Universidade de Aveiro}, considerando o seu planeamento, desenho, implementação e validação tendo em conta o código fornecido como base para o trabalho.
+
+No guião de apresentação deste segundo projeto, era pedido o {\itshape planeamento}, {\itshape desenho}, {\itshape implementação} e {\itshape validação} de um protocolo que permita a {\bfseries comunicação segura} (confidencial e íntegra) entre dois pontos, nomeadamente {\bfseries um cliente e um servidor} através de uma ligação por {\bfseries sockets T\+CP}, em \href{https://realpython.com/python-sockets/}{\tt Python}.
+
+\subsection*{$\ast$$\ast$2. Planeamento$\ast$$\ast$}
+
+\subsubsection*{2.\+1 Objetivos do trabalho}
+
+De modo a planear a solução a desenvolver, é necessário considerar {\bfseries os seguintes aspetos}, presentes no guião de apresentação do projeto\+:
+
+
+\begin{DoxyEnumerate}
+\item {\bfseries Desenhar um protocolo} para o estabelecimento de uma {\bfseries sessão segura} entre o {\itshape cliente} e o {\itshape servidor}, suportando\+:
+\begin{DoxyItemize}
+\item a) Negociação dos algoritmos usados
+\item b) Confidencialidade
+\item c) Controlo de integridade
+\item d) Rotação de chaves
+\item e) Suporte de pelo menos duas cifras simétricas (ex\+: A\+ES e Salsa20)
+\item f) Dois modos de cifra (ex\+: C\+BC e G\+CM)
+\item g) Dois algoritmos de síntese (ex\+: S\+H\+A-\/256 e S\+H\+A-\/512)
+\end{DoxyItemize}
+\item {\bfseries Implementar a negociação} de algoritmos de cifra entre cliente e servidor.
+\item {\bfseries Implementar o suporte para confidencialidade}, resultando em mensagens cifradas.
+\item {\bfseries Implementar o suporte para integridade}, resultando na adição de códigos de integridade às mensagens.
+\item {\bfseries Implementar um mecanismo para rotação da chave} utilizada após um volume de dados ou tempo decorrido.
+\end{DoxyEnumerate}
+
+Outros aspetos a considerar são {\bfseries os seguintes}\+:
+
+
+\begin{DoxyItemize}
+\item {\bfseries Implementação de funções genéricas} de cifra/decifra/cálculo de um M\+A\+C/verificação de um M\+AC de textos
+\item {\bfseries Criação de novos tipos de mensagens} a enviar, incluindo as mensagens já existentes dentro do conteúdo destas novas mensagens (num formato cifrado e íntegro). 
+\end{DoxyItemize}

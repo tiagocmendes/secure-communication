@@ -24,34 +24,38 @@ class ClientProtocol(asyncio.Protocol):
     """
     Client that handles a single client
     """
-
     def __init__(self, file_name, loop):
         """
         Default constructor
-        :param file_name: Name of the file to send
-        :param loop: Asyncio Loop to use
+
+        @param file_name: Name of the file to send
+        @param loop: Asyncio Loop to use
         """
 
         self.file_name = file_name
         self.loop = loop
-        self.chunk_count=0
-        self.last_pos=0
-        self.symetric_ciphers=['AES','3DES']
-        self.cipher_modes=['ECB','CBC']
-        self.digest=['SHA256','SHA384','MD5','SHA512','BLAKE2']
+        self.chunk_count = 0
+        self.last_pos = 0
+        self.symetric_ciphers = ['AES', '3DES']
+        self.cipher_modes = ['ECB', 'CBC']
+        self.digest = ['SHA256', 'SHA384', 'MD5', 'SHA512', 'BLAKE2']
         self.state = STATE_CONNECT  # Initial State
         self.buffer = ''  # Buffer to receive data chunks
-        self.choosen_cipher=None
-        self.choosen_mode=None
-        self.choosen_digest=None
+        self.choosen_cipher = None
+        self.choosen_mode = None
+        self.choosen_digest = None
 
         self.crypto = Crypto(self.choosen_cipher, self.choosen_mode, self.choosen_digest)
 
         self.encrypted_data = ''
     
-    def encrypt_payload(self, message):
-        secure_message = {'type': 'SECURE_X', 'payload': None}
+    def encrypt_payload(self, message: dict) -> None:
+        """
+        Called when a secure message will be sent, in order to encrypt its payload.
 
+        @param message: JSON message of type OPEN, DATA or CLOSE
+        """
+        secure_message = {'type': 'SECURE_X', 'payload': None}
         payload = json.dumps(message).encode()
         criptogram = self.crypto.file_encryption(payload)
         secure_message['payload'] = base64.b64encode(criptogram).decode()
@@ -59,7 +63,10 @@ class ClientProtocol(asyncio.Protocol):
 
         return secure_message
     
-    def send_mac(self):
+    def send_mac(self) -> None:
+        """
+        Called when a secure message is sent and a MAC is necessary to check message authenticity.
+        """
         self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
         logger.debug("My MAC: {}".format(self.crypto.mac))
         message = {'type': 'MAC', 'data': base64.b64encode(self.crypto.mac).decode()}
@@ -80,13 +87,9 @@ class ClientProtocol(asyncio.Protocol):
 
         message = {'type':'NEGOTIATION','algorithms':{'symetric_ciphers':self.symetric_ciphers,'chiper_modes':self.cipher_modes,'digest':self.digest}}
 
-        # TODO implementar na logica mais a frente
-        #message = {'type': 'OPEN', 'file_name': self.file_name} 
         self._send(message)
 
-        #self.state = STATE_OPEN # TODO change to another state (STATE_NEGOTIATION)
-
-    
+        # self.state = STATE_OPEN # TODO change to another state (STATE_NEGOTIATION)
 
     def data_received(self, data: str) -> None:
         """
@@ -289,19 +292,13 @@ class ClientProtocol(asyncio.Protocol):
                     break
             
             logger.debug("Chunks: {}".format(self.chunk_count))
-            #When it ends create MAC
+            # When it ends create MAC
             if file_ended:
-                self._send({'type': 'CLOSE'})
+                self._send(self.encrypt_payload({'type': 'CLOSE'}))
+                self.send_mac()
                 logger.info("File transferred. Closing transport")
                 self.transport.close()
-            
-
-            '''
-            self._send({'type': 'CLOSE'})
-            logger.info("File transferred. Closing transport")
-            self.transport.close()
-            '''
-
+        
     def _send(self, message: str) -> None:
         """
         Effectively encodes and sends a message
@@ -312,7 +309,6 @@ class ClientProtocol(asyncio.Protocol):
 
         message_b = (json.dumps(message) + '\r\n').encode()
         self.transport.write(message_b)
-
 
 def main():
     parser = argparse.ArgumentParser(description='Sends files to servers.')
