@@ -19,7 +19,6 @@ STATE_CLOSE = 3
 STATE_KEY_ROTATION=4
 
 
-
 class ClientProtocol(asyncio.Protocol):
     """
     Client that handles a single client
@@ -77,8 +76,7 @@ class ClientProtocol(asyncio.Protocol):
         """
         Called when the client connects.
 
-        :param transport: The transport stream to use for this client
-        :return: No return
+        @param transport: The transport stream to use for this client
         """
         self.transport = transport
 
@@ -96,8 +94,7 @@ class ClientProtocol(asyncio.Protocol):
         Called when data is received from the server.
         Stores the data in the buffer
 
-        :param data: The data that was received. This may not be a complete JSON message
-        :return:
+        @param data: The data that was received. This may not be a complete JSON message
         """
         logger.debug('Received: {}'.format(data))
         try:
@@ -123,11 +120,10 @@ class ClientProtocol(asyncio.Protocol):
         """
         Processes a frame (JSON Object)
 
-        :param frame: The JSON Object to process
-        :return:
+        @param frame: The JSON Object to process
         """
-
         logger.debug("Frame: {}".format(frame))
+
         try:
             message = json.loads(frame)
         except:
@@ -163,11 +159,12 @@ class ClientProtocol(asyncio.Protocol):
         
         elif mtype == 'DH_PARAMETERS_RESPONSE':
             logger.debug('DH_PARAMETERS_RESPONSE')
-            public_key=bytes(message['parameters']['public_key'],'ISO-8859-1')
-            #Create shared key with the server public key
+            public_key = bytes(message['parameters']['public_key'],'ISO-8859-1')
+
+            # Create shared key with the server public key
             self.crypto.create_shared_key(public_key)
             
-            #Generate a symetric key
+            # Generate a symetric key
             self.crypto.symmetric_key_gen()
             logger.debug("Key: {}".format(self.crypto.symmetric_key))
             secure_message = self.encrypt_payload({'type': 'OPEN', 'file_name': self.file_name})
@@ -178,11 +175,12 @@ class ClientProtocol(asyncio.Protocol):
 
         elif mtype == 'DH_PARAMETERS_ROTATION_RESPONSE':
             logger.debug('DH_PARAMETERS_ROTATION_RESPONSE')
-            public_key=bytes(message['parameters']['public_key'],'ISO-8859-1')
-            #Create shared key with the server public key
+            public_key = bytes(message['parameters']['public_key'],'ISO-8859-1')
+            
+            # Create shared key with the server public key
             self.crypto.create_shared_key(public_key)
             
-            #Generate a symetric key
+            # Generate a symetric key
             self.crypto.symmetric_key_gen()
             logger.debug("Key: {}".format(self.crypto.symmetric_key))
             secure_message = self.encrypt_payload({'type': 'OPEN', 'file_name': self.file_name})
@@ -193,19 +191,18 @@ class ClientProtocol(asyncio.Protocol):
 
         elif mtype == 'NEGOTIATION_RESPONSE':
             logger.info("Negotiation response")
-            #Receive the choosen algorithms by the server 
+
+            # Receive the choosen algorithms by the server 
             self.process_negotiation_response(message)
-            #Generate Diffie Helman client private and public keys
+
+            # Generate Diffie Helman client private and public keys
             bytes_public_key,p,g,y=self.crypto.diffie_helman_client()
             
-            
-            message={'type':'DH_PARAMETERS','parameters':{'p':p,'g':g,'y':y,'public_key':str(bytes_public_key,'ISO-8859-1')}}
+            message = {'type':'DH_PARAMETERS','parameters':{'p':p,'g':g,'y':y,'public_key':str(bytes_public_key,'ISO-8859-1')}}
             self._send(message)
             
             return
 
-
-        
         elif mtype == 'KEY_RECEIVED':
             logger.debug("Sending file")
             message = {'type': 'OPEN', 'file_name': self.crypto.encrypted_file_name} 
@@ -214,14 +211,19 @@ class ClientProtocol(asyncio.Protocol):
             self.state = STATE_OPEN
             return 
 
-
         else:
             logger.warning("Invalid message type")
+
         logger.debug('CLosing')
         self.transport.close()
         self.loop.stop()
 
-    def process_negotiation_response(self,message: str) -> bool:
+    def process_negotiation_response(self, message: str) -> bool:
+        """
+        Called when a response of type NEGOTIATION is received.
+
+        @param message: Received message
+        """
         logger.debug("Process Negotiation: {}".format(message))
 
         self.crypto.symmetric_cipher=message['chosen_algorithms']['symetric_cipher']
@@ -230,13 +232,10 @@ class ClientProtocol(asyncio.Protocol):
 
         logger.info("Choosen algorithms: {} {} {}".format(self.crypto.symmetric_cipher,self.crypto.cipher_mode,self.crypto.digest))
 		
-
-    
     def connection_lost(self, exc):
         """
         Connection was lost for some reason.
-        :param exc:
-        :return:
+        @param exc:
         """
         logger.info('The server closed the connection')
         self.loop.stop()
@@ -245,8 +244,7 @@ class ClientProtocol(asyncio.Protocol):
         """
         Sends a file to the server.
         The file is read in chunks, encoded to Base64 and sent as part of a DATA JSON message
-        :param file_name: File to send
-        :return:  None
+        @param file_name: File to send
         """
 
         with open(file_name, 'rb') as f:
@@ -254,28 +252,23 @@ class ClientProtocol(asyncio.Protocol):
             file_ended = False
             read_size = 16 * 60 #TODO read_size depends on the alg you are using, AES=16*60, 3DES=8*60, but maybe we dont have to change because the encrypt already deals with that
             while True:
-                if self.last_pos!=0:
+                if self.last_pos != 0:
                     f.seek(self.last_pos)
-                    self.last_pos=0
-                if self.chunk_count==1000:
-                    logger.debug("100 chunks")
-                    #Generate Diffie Helman client private and public keys
-                    bytes_public_key,p,g,y=self.crypto.diffie_helman_client()
-                    
-                    
-                    message={'type':'DH_PARAMETERS_ROTATION','parameters':{'p':p,'g':g,'y':y,'public_key':str(bytes_public_key,'ISO-8859-1')}}
-                    self.chunk_count=0
-                    self.last_pos=f.tell()
-                    self.state=STATE_KEY_ROTATION
+                    self.last_pos = 0
+                if self.chunk_count == 1000:
+                    logger.debug("1000 chunks")
+                    # Generate Diffie Helman client private and public keys
+                    bytes_public_key, p, g, y = self.crypto.diffie_helman_client()
+                
+                    message = {'type':'DH_PARAMETERS_ROTATION','parameters':{'p':p,'g':g,'y':y,'public_key':str(bytes_public_key,'ISO-8859-1')}}
+                    self.chunk_count = 0
+                    self.last_pos = f.tell()
+                    self.state = STATE_KEY_ROTATION
 
                     self._send(message)
                     break
                     
-                    
-                    
-
-
-                self.chunk_count+=1
+                self.chunk_count += 1
                 
                 data = f.read(16 * 60)
                 message['data'] = base64.b64encode(data).decode()
@@ -285,8 +278,6 @@ class ClientProtocol(asyncio.Protocol):
                 self._send(secure_message)
                 self.send_mac()
                 
-
-
                 if len(data) != read_size:
                     file_ended=True
                     break
