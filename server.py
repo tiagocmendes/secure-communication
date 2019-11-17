@@ -17,10 +17,7 @@ STATE_DATA = 2
 STATE_CLOSE= 3
 STATE_KEY_ROTATION=4
 STATE_NEGOTIATION=5
-STATE_DH=6
-#negoviaçao
-#dh
-#
+STATE_DH = 6
 
 #GLOBAL
 storage_dir = 'files'
@@ -145,7 +142,8 @@ class ClientHandler(asyncio.Protocol):
 					self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode()),iv))
 				else:
 					self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode())))
-
+				
+				# process secure message
 				self.process_secure()
 
 		elif mtype == 'NEGOTIATION':
@@ -153,8 +151,6 @@ class ClientHandler(asyncio.Protocol):
 			(ret,error) = self.process_negotiation(message)
 			self.state=STATE_NEGOTIATION
 
-		
-		
 		elif mtype=='DH_PARAMETERS':
 			logger.debug('DH ROTATION RECEIVED')
 			ret=self.process_dh_parameters(message)
@@ -170,8 +166,6 @@ class ClientHandler(asyncio.Protocol):
 			else:
 				self.state=STATE_DH
 			self.new_key=True
-
-		
 
 		else:
 			logger.warning("Invalid message type: {}".format(message['type']))
@@ -192,9 +186,16 @@ class ClientHandler(asyncio.Protocol):
 			self.transport.close()
 
 	def process_mac(self,message: str) -> bool:
+		"""
+		Processes a MAC message from the client.
+		It checks the authenticity/integrity of a previous received message.
+
+		@param message: The message to process.
+		"""
 		logger.debug("Process MAC: {}".format(message))
 
 		client_mac = base64.b64decode(message['data'])
+
 		# Generate server MAC
 		self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
 		logger.debug("Client mac: {}".format(base64.b64decode(client_mac)))
@@ -208,6 +209,12 @@ class ClientHandler(asyncio.Protocol):
 		
 	
 	def process_dh_parameters(self,message: str) -> bool:
+		"""
+		Processes a DH_PARAMETERS message from the client.
+		It computes a shared key necessary to the Diffie Helman algorithm.
+
+		@param message: The message to process.
+		"""
 		logger.debug("Process DH parameters: {}".format(message))
 
 		y = message['parameters']['y']
@@ -216,12 +223,19 @@ class ClientHandler(asyncio.Protocol):
 		bytes_public_key = bytes(message['parameters']['public_key'], 'ISO-8859-1')
 
 		try:
-			ret=self.crypto.diffie_helman_server(p,g,y,bytes_public_key)
+			ret = self.crypto.diffie_helman_server(p,g,y,bytes_public_key)
 			return ret
 		except:
 			return False
 			
 	def process_negotiation(self,message: str) -> bool:
+		"""
+		Processes a NEGOTIATION message from the client.
+		It checks which symmetric ciphers, cipher modes 
+		and digest functions are available at the server.
+
+		@param message: The message to process.
+		"""
 		logger.debug("Process Negotiation: {}".format(message))
 		choosen_chipher = None
 		choosen_mode = None
@@ -379,6 +393,11 @@ class ClientHandler(asyncio.Protocol):
 		return True
 	
 	def process_secure(self):
+		"""
+		Processes a SECURE_X message from the client.
+		It has an encrypted payload that should be decrypted.
+		The payload has a JSON message that could be of type OPEN, DATA or CLOSE.
+		"""
 		logger.debug("Process Secure: {}".format(self.encrypted_data))
 		
 		message = json.loads(self.decrypted_data[0])
