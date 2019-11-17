@@ -37,6 +37,7 @@ class ClientHandler(asyncio.Protocol):
 		self.new_key=False
 		self.buffer = ''
 		self.peername = ''
+
 		self.symetric_ciphers=['AES','3DES']
 		self.cipher_modes=['GCM']
 		self.digest=['SHA256','SHA384','MD5','SHA512','BLAKE2']
@@ -142,7 +143,7 @@ class ClientHandler(asyncio.Protocol):
 					self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode()),iv))
 				else:
 					self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode())))
-				
+
 				# process secure message
 				self.process_secure()
 
@@ -399,7 +400,6 @@ class ClientHandler(asyncio.Protocol):
 		The payload has a JSON message that could be of type OPEN, DATA or CLOSE.
 		"""
 		logger.debug("Process Secure: {}".format(self.encrypted_data))
-		
 		message = json.loads(self.decrypted_data[0])
 		mtype = message['type'] 
 		

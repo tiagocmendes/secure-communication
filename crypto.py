@@ -199,15 +199,23 @@ class Crypto:
             cipher = Cipher(algorithms.TripleDES(self.symmetric_key), mode, backend=backend)
     
         elif self.symmetric_cipher == 'ChaCha20':
-            # FIXME block size
-            pass
-            #block_size = algorithms.ChaCha20(self.symmetric_key).block_size
-            #cipher = Cipher(algorithms.ChaCha20(key), mode, backend=backend)
+            nonce = os.urandom(16)
+            algorithm = algorithms.ChaCha20(self.symmetric_key, nonce)
+            cipher = Cipher(algorithm, mode=None, backend=default_backend())
         else:
             raise Exception("Symmetric cipher not found")
         
         
         encryptor = cipher.encryptor()
+        if self.symmetric_cipher != 'ChaCha20':
+            padding = block_size - len(data) % block_size
+
+            padding = 16 if padding and self.symmetric_cipher == 'AES' == 0 else padding 
+            padding = 8 if padding and self.symmetric_cipher == '3DES' == 0 else padding 
+            padding = 64 if padding and self.symmetric_cipher == 'ChaCha20' == 0 else padding 
+
+            data += bytes([padding]*padding)
+        criptogram = encryptor.update(data)
         if self.cipher_mode!='GCM':
             padding = block_size - len(data) % block_size
 
@@ -253,9 +261,9 @@ class Crypto:
             block_size = algorithms.TripleDES(self.symmetric_key).block_size
             cipher = Cipher(algorithms.TripleDES(self.symmetric_key), mode, backend=backend)
         elif self.symmetric_cipher == 'ChaCha20':
-            pass
-            # block_size = algorithms.ChaCha20(key).block_size
-            # cipher = Cipher(algorithms.ChaCha20(key), modes.ECB(), backend=backend)
+            nonce = os.urandom(16)
+            algorithm = algorithms.ChaCha20(self.symmetric_key, nonce)
+            cipher = Cipher(algorithm, mode=None, backend=default_backend())
         else:
             raise Exception("Mode not found")
             
