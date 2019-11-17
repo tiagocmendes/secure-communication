@@ -16,6 +16,8 @@ STATE_OPEN = 1
 STATE_DATA = 2
 STATE_CLOSE= 3
 STATE_KEY_ROTATION=4
+STATE_NEGOTIATION=5
+STATE_DH=6
 #negoviaçao
 #dh
 #
@@ -112,29 +114,42 @@ class ClientHandler(asyncio.Protocol):
 		error=None
 
 		if mtype == 'OPEN':
-			if self.state==STATE_CONNECT:
+			if self.state==STATE_DH: # Check if statte equal DH
 				ret = self.process_open(message)
 			else:
 				self._send({'type': 'OK'})
+				self.state = STATE_OPEN
+
 				ret=True
 
 		elif mtype == 'SECURE_X':
 			self.encrypted_data += message['payload']
-			self.decrypted_data.append(self.crypto.decryption(base64.b64decode(message['payload'].encode())))
+			
 			ret = True
 
 		elif mtype=='MAC':
 			
 			(ret,error)= self.process_mac(message)
+			
 			if ret:
+				iv=base64.b64decode(message['iv'])
+				logger.debug("IV: {}".format(iv))
+				if iv!='':
+					self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode()),iv))
+				else:
+					self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode())))
+
 				self.process_secure()
 
 		elif mtype=='NEGOTIATION':
 			logger.debug('Negotiation received')
 			(ret,error) = self.process_negotiation(message)
+			self.state=STATE_NEGOTIATION
 
+		
+		
 		elif mtype=='DH_PARAMETERS':
-			logger.debug('DH RECEIVED')
+			logger.debug('DH ROTATION RECEIVED')
 			ret=self.process_dh_parameters(message)
 
 			#Generate a symetric key
@@ -143,26 +158,13 @@ class ClientHandler(asyncio.Protocol):
 
 			message={'type':'DH_PARAMETERS_RESPONSE','parameters':{'public_key':str(self.crypto.public_key,'ISO-8859-1')}}
 			self._send(message)
+			if self.state==STATE_DATA:
+				self.state=STATE_KEY_ROTATION
+			else:
+				self.state=STATE_DH
 			self.new_key=True
+
 		
-		elif mtype=='DH_PARAMETERS_ROTATION':
-			logger.debug('DH ROTATION RECEIVED')
-			ret=self.process_dh_parameters(message)
-
-			#Generate a symetric key
-			self.crypto.symmetric_key_gen()
-			logger.debug("Key: {}".format(self.crypto.symmetric_key))
-
-			message={'type':'DH_PARAMETERS_ROTATION_RESPONSE','parameters':{'public_key':str(self.crypto.public_key,'ISO-8859-1')}}
-			self._send(message)
-			self.state=STATE_KEY_ROTATION
-			self.new_key=True
-
-		elif mtype == 'KEY':
-			logger.debug('Key received {}'.format(message['symetric_key']))
-			#ret=True
-			self._send({'type':'KEY_RECEIVED'})
-			ret=True
 
 		elif mtype == 'DATA':
 			ret = self.process_data(message)
@@ -268,7 +270,7 @@ class ClientHandler(asyncio.Protocol):
 		"""
 		logger.debug("Process Open: {}".format(message))
 
-		if self.state != STATE_CONNECT:
+		if self.state != STATE_DH:
 			logger.warning("Invalid state. Discarding")
 			return False
 
@@ -287,7 +289,7 @@ class ClientHandler(asyncio.Protocol):
 				return False
 
 		try:
-			self.file = open(file_path, "wb") #TODO append bytes
+			self.file = open('testfile2.txt', "wb") #TODO append bytes
 			logger.info("File open")
 		except Exception:
 			logger.exception("Unable to open file")
@@ -311,7 +313,7 @@ class ClientHandler(asyncio.Protocol):
 		"""
 		logger.debug("Process Data: {}".format(message))
 
-		if self.state == STATE_OPEN:
+		if self.state == STATE_OPEN or self.state == STATE_KEY_ROTATION:
 			self.state = STATE_DATA
 			# First Packet
 
@@ -376,7 +378,7 @@ class ClientHandler(asyncio.Protocol):
 		mtype = message['type'] 
 		
 		if mtype == 'OPEN':
-			if self.state==STATE_CONNECT:
+			if self.state==STATE_DH:
 				ret = self.process_open(message)
 			else:
 				self._send({'type': 'OK'})

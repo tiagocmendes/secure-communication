@@ -34,6 +34,7 @@ class Crypto:
         self.private_key=None
         self.shared_key=None
         self.mac=None
+        self.iv=None
         self.encrypted_file_name="encrypted_file.txt"
     
     def diffie_helman_server(self,p,g,y,bytes_public_key):
@@ -141,6 +142,9 @@ class Crypto:
         
         key = kdf.derive(self.shared_key)
 
+        #Generate IV
+
+
         if self.symmetric_cipher == 'AES':
             self.symmetric_key = key[:16]
         elif self.symmetric_cipher == '3DES':
@@ -162,10 +166,11 @@ class Crypto:
         
         if self.cipher_mode == 'ECB':
             mode = modes.ECB()
-        
+        # TODO GCM send tag
         elif self.cipher_mode == 'CBC':
             # FIXME initialization vector
-            mode = modes.CBC(b"a" * 16)
+            self.iv=os.urandom(16)
+            mode = modes.CBC(self.iv)
         
         if self.symmetric_cipher == 'AES':
             block_size = algorithms.AES(self.symmetric_key).block_size
@@ -187,7 +192,6 @@ class Crypto:
         encryptor = cipher.encryptor()
         padding = block_size - len(data) % block_size
 
-        #TODO Check if paddings are correct
         padding = 16 if padding and self.symmetric_cipher == 'AES' == 0 else padding 
         padding = 8 if padding and self.symmetric_cipher == '3DES' == 0 else padding 
         padding = 64 if padding and self.symmetric_cipher == 'ChaCha20' == 0 else padding 
@@ -198,7 +202,7 @@ class Crypto:
 
        
 
-    def decryption(self, data):
+    def decryption(self, data,iv=None):
         backend = default_backend() 
         cipher = None
         block_size = 0
@@ -208,7 +212,9 @@ class Crypto:
         
         elif self.cipher_mode == 'CBC':
             # FIXME initialization vector
-            mode = modes.CBC(b"a" * 16)
+            if iv is not None:
+
+                mode = modes.CBC(iv)
 
         if self.symmetric_cipher == 'AES':
             block_size = algorithms.AES(self.symmetric_key).block_size

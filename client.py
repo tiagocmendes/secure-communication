@@ -17,6 +17,8 @@ STATE_OPEN = 1
 STATE_DATA = 2
 STATE_CLOSE = 3
 STATE_KEY_ROTATION=4
+STATE_NEGOTIATION=5
+STATE_DH=6
 
 
 
@@ -62,7 +64,12 @@ class ClientProtocol(asyncio.Protocol):
     def send_mac(self):
         self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
         logger.debug("My MAC: {}".format(self.crypto.mac))
-        message = {'type': 'MAC', 'data': base64.b64encode(self.crypto.mac).decode()}
+        if self.crypto.iv is None:
+            iv=''
+        else:
+            iv=base64.b64encode(self.crypto.iv).decode()
+
+        message = {'type': 'MAC', 'data': base64.b64encode(self.crypto.mac).decode(), 'iv':iv}
         self._send(message)
         self.encrypted_data = ''
 
@@ -80,11 +87,10 @@ class ClientProtocol(asyncio.Protocol):
 
         message = {'type':'NEGOTIATION','algorithms':{'symetric_ciphers':self.symetric_ciphers,'chiper_modes':self.cipher_modes,'digest':self.digest}}
 
-        # TODO implementar na logica mais a frente
-        #message = {'type': 'OPEN', 'file_name': self.file_name} 
+       
         self._send(message)
 
-        #self.state = STATE_OPEN # TODO change to another state (STATE_NEGOTIATION)
+        self.state = STATE_NEGOTIATION # TODO change to another state (STATE_NEGOTIATION)
 
     
 
@@ -157,23 +163,7 @@ class ClientProtocol(asyncio.Protocol):
                 logger.info("File transferred. Closing transport")
                 self.transport.close()
 
-        
         elif mtype == 'DH_PARAMETERS_RESPONSE':
-            logger.debug('DH_PARAMETERS_RESPONSE')
-            public_key=bytes(message['parameters']['public_key'],'ISO-8859-1')
-            #Create shared key with the server public key
-            self.crypto.create_shared_key(public_key)
-            
-            #Generate a symetric key
-            self.crypto.symmetric_key_gen()
-            logger.debug("Key: {}".format(self.crypto.symmetric_key))
-            secure_message = self.encrypt_payload({'type': 'OPEN', 'file_name': self.file_name})
-            self._send(secure_message)
-            self.send_mac()
-            self.state = STATE_OPEN
-            return
-
-        elif mtype == 'DH_PARAMETERS_ROTATION_RESPONSE':
             logger.debug('DH_PARAMETERS_ROTATION_RESPONSE')
             public_key=bytes(message['parameters']['public_key'],'ISO-8859-1')
             #Create shared key with the server public key
@@ -182,10 +172,17 @@ class ClientProtocol(asyncio.Protocol):
             #Generate a symetric key
             self.crypto.symmetric_key_gen()
             logger.debug("Key: {}".format(self.crypto.symmetric_key))
-            secure_message = self.encrypt_payload({'type': 'OPEN', 'file_name': self.file_name})
-            self._send(secure_message)
+            if self.state==STATE_KEY_ROTATION:
+                self.send_file(self.file_name)
+
+            elif self.state==STATE_DH:
+                secure_message = self.encrypt_payload({'type': 'OPEN', 'file_name': self.file_name})
+                self._send(secure_message)
+            
+            
             self.send_mac()
             self.state = STATE_OPEN
+            
             return
 
         elif mtype == 'NEGOTIATION_RESPONSE':
@@ -198,18 +195,13 @@ class ClientProtocol(asyncio.Protocol):
             
             message={'type':'DH_PARAMETERS','parameters':{'p':p,'g':g,'y':y,'public_key':str(bytes_public_key,'ISO-8859-1')}}
             self._send(message)
+            self.state=STATE_DH
             
             return
 
 
         
-        elif mtype == 'KEY_RECEIVED':
-            logger.debug("Sending file")
-            message = {'type': 'OPEN', 'file_name': self.crypto.encrypted_file_name} 
-            self._send(message)
-
-            self.state = STATE_OPEN
-            return 
+    
 
 
         else:
@@ -254,23 +246,20 @@ class ClientProtocol(asyncio.Protocol):
                 if self.last_pos!=0:
                     f.seek(self.last_pos)
                     self.last_pos=0
-                if self.chunk_count==1000:
-                    logger.debug("100 chunks")
+
+                if self.chunk_count==100:
+                    logger.debug("1000 chunks")
                     #Generate Diffie Helman client private and public keys
                     bytes_public_key,p,g,y=self.crypto.diffie_helman_client()
                     
                     
-                    message={'type':'DH_PARAMETERS_ROTATION','parameters':{'p':p,'g':g,'y':y,'public_key':str(bytes_public_key,'ISO-8859-1')}}
+                    message={'type':'DH_PARAMETERS','parameters':{'p':p,'g':g,'y':y,'public_key':str(bytes_public_key,'ISO-8859-1')}}
                     self.chunk_count=0
                     self.last_pos=f.tell()
                     self.state=STATE_KEY_ROTATION
 
                     self._send(message)
                     break
-                    
-                    
-                    
-
 
                 self.chunk_count+=1
                 
