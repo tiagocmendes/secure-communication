@@ -35,6 +35,7 @@ class Crypto:
         self.shared_key=None
         self.mac=None
         self.iv=None
+        self.gcm_tag=None
         self.encrypted_file_name="encrypted_file.txt"
     
     """
@@ -173,7 +174,7 @@ class Crypto:
 
     @param file_name: file to encrypt
     """
-    def file_encryption(self, data):
+    def file_encryption(self, data,associated_data=None):
         backend = default_backend()
         cipher = None 
         block_size = 0
@@ -181,7 +182,9 @@ class Crypto:
         
         if self.cipher_mode == 'ECB':
             mode = modes.ECB()
-        # TODO GCM send tag
+        elif self.cipher_mode == 'GCM':
+            self.iv=os.urandom(16)
+            mode = modes.GCM(self.iv)
         elif self.cipher_mode == 'CBC':
             # FIXME initialization vector
             self.iv=os.urandom(16)
@@ -205,28 +208,38 @@ class Crypto:
         
         
         encryptor = cipher.encryptor()
-        padding = block_size - len(data) % block_size
+        if self.cipher_mode!='GCM':
+            padding = block_size - len(data) % block_size
 
-        padding = 16 if padding and self.symmetric_cipher == 'AES' == 0 else padding 
-        padding = 8 if padding and self.symmetric_cipher == '3DES' == 0 else padding 
-        padding = 64 if padding and self.symmetric_cipher == 'ChaCha20' == 0 else padding 
+            padding = 16 if padding and self.symmetric_cipher == 'AES' == 0 else padding 
+            padding = 8 if padding and self.symmetric_cipher == '3DES' == 0 else padding 
+            padding = 64 if padding and self.symmetric_cipher == 'ChaCha20' == 0 else padding 
 
-        data += bytes([padding]*padding)
-        criptogram = encryptor.update(data)
+            data += bytes([padding]*padding)
+            criptogram = encryptor.update(data)
+
+        else:
+            encryptor.authenticate_additional_data(associated_data)
+            criptogram = encryptor.update(data)+encryptor.finalize()
+            self.gcm_tag=encryptor.tag
+
+
         return criptogram
 
     """
     File decryption with symmetric ciphers AES, 3DES or ChaCha20 with ECB or CBC cipher modes.
     """
     
-    def decryption(self, data,iv=None):
+    def decryption(self, data,iv=None,tag=None,associated_data=None):
         backend = default_backend() 
         cipher = None
         block_size = 0
 
         if self.cipher_mode == 'ECB':
             mode = modes.ECB()
-        
+        elif self.cipher_mode == 'GCM':
+            self.iv=os.urandom(16)
+            mode = modes.GCM(iv,tag)
         elif self.cipher_mode == 'CBC':
             # FIXME initialization vector
             if iv is not None:
@@ -248,9 +261,12 @@ class Crypto:
             
         decryptor = cipher.decryptor()
 
-        padding = block_size - len(data) % block_size
-
+        if self.cipher_mode=='GCM':
+            decryptor.authenticate_additional_data(associated_data)
        
     
         ct = decryptor.update(data)+decryptor.finalize()
+        
+        if self.cipher_mode=='GCM':
+            return ct
         return ct[:-ct[-1]]

@@ -41,7 +41,7 @@ class ClientHandler(asyncio.Protocol):
 		self.buffer = ''
 		self.peername = ''
 		self.symetric_ciphers=['AES','3DES']
-		self.cipher_modes=['ECB','CBC']
+		self.cipher_modes=['GCM']
 		self.digest=['SHA256','SHA384','MD5','SHA512','BLAKE2']
 		self.choosen_cipher=None
 		self.choosen_mode=None
@@ -113,7 +113,6 @@ class ClientHandler(asyncio.Protocol):
 		mtype = message.get('type', "").upper()
 		error=None
 
-<<<<<<< HEAD
 		if mtype == 'OPEN':
 			if self.state==STATE_DH: # Check if statte equal DH
 				ret = self.process_open(message)
@@ -122,8 +121,6 @@ class ClientHandler(asyncio.Protocol):
 				self.state = STATE_OPEN
 
 				ret=True
-=======
->>>>>>> 087e709cece7aaed6332a5456ef3b4c830349201
 
 		if mtype == 'SECURE_X':
 			self.encrypted_data += message['payload']
@@ -136,8 +133,15 @@ class ClientHandler(asyncio.Protocol):
 			
 			if ret:
 				iv=base64.b64decode(message['iv'])
+				tag=base64.b64decode(message['tag'])
+
 				logger.debug("IV: {}".format(iv))
-				if iv!='':
+				if iv!='' and tag!='':
+					self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode()),iv,tag,b"HELLO"))
+					teste=self.crypto.decryption(base64.b64decode(self.encrypted_data.encode()),iv,tag,b"HELLO")
+					print(f"Decrypted data: {teste} ")
+
+				elif iv!='':
 					self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode()),iv))
 				else:
 					self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode())))
@@ -226,11 +230,14 @@ class ClientHandler(asyncio.Protocol):
 
 		for cipher in self.symetric_ciphers:
 			if cipher in message['algorithms']['symetric_ciphers']:
+				
 				choosen_chipher = cipher
 				break
 		
 		for cipher_mode in self.cipher_modes:
 			if cipher_mode in message['algorithms']['chiper_modes']:
+				if cipher_mode=='GCM' and choosen_chipher!='AES':
+					continue
 				choosen_mode = cipher_mode
 				break
 		
@@ -288,7 +295,7 @@ class ClientHandler(asyncio.Protocol):
 				return False
 
 		try:
-			self.file = open('testfile2.txt', "wb") #TODO append bytes
+			self.file = open(file_name, "wb") #TODO append bytes
 			logger.info("File open")
 		except Exception:
 			logger.exception("Unable to open file")
