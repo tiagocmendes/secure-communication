@@ -15,6 +15,7 @@ STATE_CONNECT = 0
 STATE_OPEN = 1
 STATE_DATA = 2
 STATE_CLOSE= 3
+STATE_KEY_ROTATION=4
 #negoviaçao
 #dh
 #
@@ -33,6 +34,8 @@ class ClientHandler(asyncio.Protocol):
 		self.file_name = None
 		self.file_path = None
 		self.storage_dir = storage_dir
+		self.last_pos=0
+		self.new_key=False
 		self.buffer = ''
 		self.peername = ''
 		self.symetric_ciphers=['AES','3DES']
@@ -109,8 +112,12 @@ class ClientHandler(asyncio.Protocol):
 		error=None
 
 		if mtype == 'OPEN':
-			ret = self.process_open(message)
-		
+			if self.state==STATE_CONNECT:
+				ret = self.process_open(message)
+			else:
+				self._send({'type': 'OK'})
+				ret=True
+
 		elif mtype == 'SECURE_X':
 			self.encrypted_data += message['payload']
 			self.decrypted_data.append(self.crypto.decryption(base64.b64decode(message['payload'].encode())))
@@ -120,13 +127,12 @@ class ClientHandler(asyncio.Protocol):
 			
 			(ret,error)= self.process_mac(message)
 			if ret:
-				message={'type':'INTEGRITY_CONTROL','data':'True'}
-				self._send(message)
 				self.process_secure()
 
 		elif mtype=='NEGOTIATION':
 			logger.debug('Negotiation received')
 			(ret,error) = self.process_negotiation(message)
+
 		elif mtype=='DH_PARAMETERS':
 			logger.debug('DH RECEIVED')
 			ret=self.process_dh_parameters(message)
@@ -137,6 +143,20 @@ class ClientHandler(asyncio.Protocol):
 
 			message={'type':'DH_PARAMETERS_RESPONSE','parameters':{'public_key':str(self.crypto.public_key,'ISO-8859-1')}}
 			self._send(message)
+			self.new_key=True
+		
+		elif mtype=='DH_PARAMETERS_ROTATION':
+			logger.debug('DH ROTATION RECEIVED')
+			ret=self.process_dh_parameters(message)
+
+			#Generate a symetric key
+			self.crypto.symmetric_key_gen()
+			logger.debug("Key: {}".format(self.crypto.symmetric_key))
+
+			message={'type':'DH_PARAMETERS_ROTATION_RESPONSE','parameters':{'public_key':str(self.crypto.public_key,'ISO-8859-1')}}
+			self._send(message)
+			self.state=STATE_KEY_ROTATION
+			self.new_key=True
 
 		elif mtype == 'KEY':
 			logger.debug('Key received {}'.format(message['symetric_key']))
@@ -315,8 +335,13 @@ class ClientHandler(asyncio.Protocol):
 			return False
 
 		try:
-			
+			logger.debug("Writing data: {}".format(bdata))
+			if self.new_key:
+				self.new_key=False
+				self.file.seek(self.last_pos)
+				self.last_pos=0
 			self.file.write(bdata)
+			self.last_pos=self.file.tell()
 			self.file.flush()
 		except:
 			logger.exception("Could not write to file")
@@ -351,7 +376,12 @@ class ClientHandler(asyncio.Protocol):
 		mtype = message['type'] 
 		
 		if mtype == 'OPEN':
-			ret = self.process_open(message)
+			if self.state==STATE_CONNECT:
+				ret = self.process_open(message)
+			else:
+				self._send({'type': 'OK'})
+				self.state = STATE_OPEN
+				ret=True
 		elif mtype == 'DATA':
 			message = {'type': 'DATA', 'data': ''}
 			for msg in self.decrypted_data:

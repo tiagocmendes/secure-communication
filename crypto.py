@@ -82,10 +82,8 @@ class Crypto:
         elif(self.digest=="BLAKE2"):
             h=hmac.HMAC(self.shared_key, hashes.BLAKE2b(64), backend=default_backend())
 
-        
-        
-       
-        h.update(my_text) # TODO read 1024 
+
+        h.update(my_text) 
             
         
         self.mac=binascii.hexlify(h.finalize()) 
@@ -122,9 +120,19 @@ class Crypto:
     """
     def symmetric_key_gen(self):
         
-       
+        if(self.digest=="SHA256"):
+            alg=hashes.SHA256()
+        elif(self.digest=="SHA384"):
+            alg=hashes.SHA384()
+        elif(self.digest=="MD5"):
+            alg=hashes.MD5()
+        elif(self.digest=="SHA512"):
+            alg=hashes.SHA512()
+        elif(self.digest=="BLAKE2"):
+            alg=hashes.BLAKE2b(64)
+        
         kdf = HKDF(
-            algorithm=hashes.SHA256(), #TODO dynamic
+            algorithm=alg,
             length=32,
             salt=None,
             info=b'handshake data',
@@ -175,9 +183,7 @@ class Crypto:
         else:
             raise Exception("Symmetric cipher not found")
         
-        #data = ''
-        #with open(file_name, 'rb') as fr:
-            #data = fr.read()
+        
         encryptor = cipher.encryptor()
         padding = block_size - len(data) % block_size
 
@@ -190,8 +196,7 @@ class Crypto:
         criptogram = encryptor.update(data)
         return criptogram
 
-        #with open(self.encrypted_file_name, 'wb') as fw:
-        #    fw.write(criptogram)
+       
 
     def decryption(self, data):
         backend = default_backend() 
@@ -222,13 +227,7 @@ class Crypto:
 
         padding = block_size - len(data) % block_size
 
-        #TODO Check if paddings are correct
-        '''
-        padding = 16 if padding and self.symmetric_cipher == 'AES' == 0 else padding 
-        padding = 8 if padding and self.symmetric_cipher == '3DES' == 0 else padding 
-        padding = 64 if padding and self.symmetric_cipher == 'ChaCha20' == 0 else padding 
-        '''
+       
     
-        #data += bytes([padding]*padding)
         ct = decryptor.update(data)+decryptor.finalize()
         return ct[:-ct[-1]]

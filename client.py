@@ -16,6 +16,8 @@ STATE_CONNECT = 0
 STATE_OPEN = 1
 STATE_DATA = 2
 STATE_CLOSE = 3
+STATE_KEY_ROTATION=4
+
 
 
 class ClientProtocol(asyncio.Protocol):
@@ -32,6 +34,8 @@ class ClientProtocol(asyncio.Protocol):
 
         self.file_name = file_name
         self.loop = loop
+        self.chunk_count=0
+        self.last_pos=0
         self.symetric_ciphers=['AES','3DES']
         self.cipher_modes=['ECB','CBC']
         self.digest=['SHA256','SHA384','MD5','SHA512','BLAKE2']
@@ -169,6 +173,21 @@ class ClientProtocol(asyncio.Protocol):
             self.state = STATE_OPEN
             return
 
+        elif mtype == 'DH_PARAMETERS_ROTATION_RESPONSE':
+            logger.debug('DH_PARAMETERS_ROTATION_RESPONSE')
+            public_key=bytes(message['parameters']['public_key'],'ISO-8859-1')
+            #Create shared key with the server public key
+            self.crypto.create_shared_key(public_key)
+            
+            #Generate a symetric key
+            self.crypto.symmetric_key_gen()
+            logger.debug("Key: {}".format(self.crypto.symmetric_key))
+            secure_message = self.encrypt_payload({'type': 'OPEN', 'file_name': self.file_name})
+            self._send(secure_message)
+            self.send_mac()
+            self.state = STATE_OPEN
+            return
+
         elif mtype == 'NEGOTIATION_RESPONSE':
             logger.info("Negotiation response")
             #Receive the choosen algorithms by the server 
@@ -181,7 +200,8 @@ class ClientProtocol(asyncio.Protocol):
             self._send(message)
             
             return
-            
+
+
         
         elif mtype == 'KEY_RECEIVED':
             logger.debug("Sending file")
@@ -231,25 +251,54 @@ class ClientProtocol(asyncio.Protocol):
             file_ended = False
             read_size = 16 * 60 #TODO read_size depends on the alg you are using, AES=16*60, 3DES=8*60, but maybe we dont have to change because the encrypt already deals with that
             while True:
+                if self.last_pos!=0:
+                    f.seek(self.last_pos)
+                    self.last_pos=0
+                if self.chunk_count==1000:
+                    logger.debug("100 chunks")
+                    #Generate Diffie Helman client private and public keys
+                    bytes_public_key,p,g,y=self.crypto.diffie_helman_client()
+                    
+                    
+                    message={'type':'DH_PARAMETERS_ROTATION','parameters':{'p':p,'g':g,'y':y,'public_key':str(bytes_public_key,'ISO-8859-1')}}
+                    self.chunk_count=0
+                    self.last_pos=f.tell()
+                    self.state=STATE_KEY_ROTATION
+
+                    self._send(message)
+                    break
+                    
+                    
+                    
+
+
+                self.chunk_count+=1
+                
                 data = f.read(16 * 60)
                 message['data'] = base64.b64encode(data).decode()
-
+                logger.debug("Data: {} read size {}".format(data,f.tell()))
                 secure_message = self.encrypt_payload(message)
                 
                 self._send(secure_message)
+                #self.send_mac()
+                self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
+                logger.debug("My MAC: {}".format(self.crypto.mac))
+                message = {'type': 'MAC', 'data': "Joao"}
+                self._send(message)
+                self.encrypted_data = ''
+
 
                 if len(data) != read_size:
                     file_ended=True
                     break
-                
+            
+            logger.debug("Chunks: {}".format(self.chunk_count))
             #When it ends create MAC
             if file_ended:
-                self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
-                logger.debug("My MAC: {}".format(self.crypto.mac))
-                message = {'type': 'MAC', 'data': base64.b64encode(self.crypto.mac).decode()}
-                self._send(message)
-                self.encrypted_data = ''
-
+                self._send({'type': 'CLOSE'})
+                logger.info("File transferred. Closing transport")
+                self.transport.close()
+            
 
             '''
             self._send({'type': 'CLOSE'})
