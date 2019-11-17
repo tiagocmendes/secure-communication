@@ -44,8 +44,7 @@ class ClientHandler(asyncio.Protocol):
 		self.crypto = Crypto(self.choosen_cipher, self.choosen_mode, self.choosen_digest)
 
 		self.encrypted_data = ''
-
-		self.decrypted_data = b''
+		self.decrypted_data = []
 
 	def connection_made(self, transport) -> None:
 		"""
@@ -80,7 +79,7 @@ class ClientHandler(asyncio.Protocol):
 		while idx >= 0:  # While there are separators
 			frame = self.buffer[:idx + 2].strip()  # Extract the JSON object
 			self.buffer = self.buffer[idx + 2:]  # Removes the JSON object from the buffer
-
+			
 			self.on_frame(frame)  # Process the frame
 			idx = self.buffer.find('\r\n')
 
@@ -108,14 +107,22 @@ class ClientHandler(asyncio.Protocol):
 
 		mtype = message.get('type', "").upper()
 		error=None
+
 		if mtype == 'OPEN':
 			ret = self.process_open(message)
+		
+		elif mtype == 'SECURE_X':
+			self.encrypted_data += message['payload']
+			self.decrypted_data.append(self.crypto.decryption(base64.b64decode(message['payload'].encode())))
+			ret = True
+
 		elif mtype=='MAC':
 			
 			(ret,error)= self.process_mac(message)
 			if ret:
 				message={'type':'INTEGRITY_CONTROL','data':'True'}
 				self._send(message)
+				self.process_secure()
 
 		elif mtype=='NEGOTIATION':
 			logger.debug('Negotiation received')
@@ -284,10 +291,6 @@ class ClientHandler(asyncio.Protocol):
 		"""
 		logger.debug("Process Data: {}".format(message))
 
-		self.encrypted_data += message['data']
-
-		self.decrypted_data += self.crypto.decryption(base64.b64decode(message['data'].encode()))
-	
 		if self.state == STATE_OPEN:
 			self.state = STATE_DATA
 			# First Packet
@@ -331,7 +334,6 @@ class ClientHandler(asyncio.Protocol):
 		:return: Boolean indicating the success of the operation
 		"""
 		logger.debug("Process Close: {}".format(message))
-		logger.debug("Message received: {}".format(str(self.decrypted_data)))
 		self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
 		logger.debug("My MAC: {}".format(self.crypto.mac))
 		self.transport.close()
@@ -340,6 +342,43 @@ class ClientHandler(asyncio.Protocol):
 			self.file = None
 
 		self.state = STATE_CLOSE
+		return True
+	
+	def process_secure(self):
+		logger.debug("Process Secure: {}".format(self.encrypted_data))
+		
+		message = json.loads(self.decrypted_data[0])
+		mtype = message['type'] 
+		
+		if mtype == 'OPEN':
+			ret = self.process_open(message)
+		elif mtype == 'DATA':
+			message = {'type': 'DATA', 'data': ''}
+			for msg in self.decrypted_data:
+				message['data'] += json.loads(msg)['data']
+			ret = self.process_data(message)
+		elif mtype == 'CLOSE':
+			ret = self.process_close(message)
+		else:
+			logger.warning("Invalid message type: {}".format(message['type']))
+			ret = False
+
+		if not ret:
+			try:
+				self._send({'type': 'ERROR', 'message': 'See server'})
+			except:
+				pass # Silently ignore
+
+			logger.info("Closing transport")
+			if self.file is not None:
+				self.file.close()
+				self.file = None
+
+			self.state = STATE_CLOSE
+			self.transport.close()
+
+		self.encrypted_data = ''
+		self.decrypted_data = []
 		return True
 
 

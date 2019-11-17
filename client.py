@@ -44,6 +44,23 @@ class ClientProtocol(asyncio.Protocol):
         self.crypto = Crypto(self.choosen_cipher, self.choosen_mode, self.choosen_digest)
 
         self.encrypted_data = ''
+    
+    def encrypt_payload(self, message):
+        secure_message = {'type': 'SECURE_X', 'payload': None}
+
+        payload = json.dumps(message).encode()
+        criptogram = self.crypto.file_encryption(payload)
+        secure_message['payload'] = base64.b64encode(criptogram).decode()
+        self.encrypted_data += secure_message['payload']
+
+        return secure_message
+    
+    def send_mac(self):
+        self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
+        logger.debug("My MAC: {}".format(self.crypto.mac))
+        message = {'type': 'MAC', 'data': base64.b64encode(self.crypto.mac).decode()}
+        self._send(message)
+        self.encrypted_data = ''
 
     def connection_made(self, transport) -> None:
         """
@@ -116,6 +133,7 @@ class ClientProtocol(asyncio.Protocol):
         if mtype == 'OK':  # Server replied OK. We can advance the state
             if self.state == STATE_OPEN:
                 logger.info("Channel open")
+                
                 self.send_file(self.file_name)
             elif self.state == STATE_DATA:  # Got an OK during a message transfer.
                 # Reserved for future use
@@ -130,7 +148,8 @@ class ClientProtocol(asyncio.Protocol):
         elif mtype=='INTEGRITY_CONTROL':
             flag=message['data']
             if flag=='True':
-                self._send({'type': 'CLOSE'})
+                self._send(self.encrypt_payload({'type': 'CLOSE'}))
+                self.send_mac()
                 logger.info("File transferred. Closing transport")
                 self.transport.close()
 
@@ -144,9 +163,9 @@ class ClientProtocol(asyncio.Protocol):
             #Generate a symetric key
             self.crypto.symmetric_key_gen()
             logger.debug("Key: {}".format(self.crypto.symmetric_key))
-            message = {'type': 'OPEN', 'file_name': self.file_name} 
-            self._send(message)
-
+            secure_message = self.encrypt_payload({'type': 'OPEN', 'file_name': self.file_name})
+            self._send(secure_message)
+            self.send_mac()
             self.state = STATE_OPEN
             return
 
@@ -209,27 +228,27 @@ class ClientProtocol(asyncio.Protocol):
 
         with open(file_name, 'rb') as f:
             message = {'type': 'DATA', 'data': None}
-            file_ended=False
+            file_ended = False
             read_size = 16 * 60 #TODO read_size depends on the alg you are using, AES=16*60, 3DES=8*60, but maybe we dont have to change because the encrypt already deals with that
             while True:
-                
                 data = f.read(16 * 60)
+                message['data'] = base64.b64encode(data).decode()
+
+                secure_message = self.encrypt_payload(message)
                 
-                criptogram = self.crypto.file_encryption(data)
-                message['data'] = base64.b64encode(criptogram).decode()
-                self.encrypted_data += message['data']
-                self._send(message)
+                self._send(secure_message)
 
                 if len(data) != read_size:
                     file_ended=True
                     break
-            
+                
             #When it ends create MAC
             if file_ended:
                 self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
                 logger.debug("My MAC: {}".format(self.crypto.mac))
                 message = {'type': 'MAC', 'data': base64.b64encode(self.crypto.mac).decode()}
                 self._send(message)
+                self.encrypted_data = ''
 
 
             '''
