@@ -10,13 +10,13 @@ Segurança Informática e Nas Organizações 2019/2020
 
 **Novembro de 2019**  
 
-## **1. Introdução**  
+## 1. Introdução
 
 O presente documento tem como principal objetivo descrever detalhadamente a solução desenvolvida tendo em conta os objetivos propostos para o segundo projeto da unidade curricular de [Segurança Informática e Nas Organizações](https://www.ua.pt/pt/uc/4143) da [Universidade de Aveiro](www.ua.pt), considerando o seu planeamento, desenho, implementação e validação tendo em conta o código fornecido como base para o trabalho.  
 
 No guião de apresentação deste segundo projeto, era pedido o *planeamento*, *desenho*, *implementação* e *validação* de um protocolo que permita a **comunicação segura** (confidencial e íntegra) entre dois pontos, nomeadamente **um cliente e um servidor** através de uma ligação por **sockets TCP**, em [Python](https://realpython.com/python-sockets/).
 
-## **2. Planeamento**  
+## 2. Planeamento 
 
 ### 2.1 Objetivos do trabalho  
 

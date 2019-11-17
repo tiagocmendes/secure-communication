@@ -37,7 +37,15 @@ class Crypto:
         self.iv=None
         self.encrypted_file_name="encrypted_file.txt"
     
-    def diffie_helman_server(self,p,g,y,bytes_public_key):
+    """
+    Called to generate the shared key in the server.
+
+    @param p
+    @param g
+    @param y
+    @param bytes_public_key
+    """
+    def diffie_helman_server(self, p, g, y, bytes_public_key):
         pn = dh.DHParameterNumbers(p, g)
         parameters = pn.parameters(default_backend())
         self.private_key = parameters.generate_private_key()
@@ -51,12 +59,16 @@ class Crypto:
         
         return True
 
-
-    def create_shared_key(self,bytes_public_key):
+    """
+    Called to create a shared key between the client and the server in the Diffie Hellman algorithm.
+    """
+    def create_shared_key(self, bytes_public_key):
         public_key_server=crypto_serialization.load_pem_public_key(bytes_public_key,backend=default_backend())
         self.shared_key=self.private_key.exchange(public_key_server)
 
-
+    """
+    Called to generate the shared key in the client.
+    """
     def diffie_helman_client(self):
         parameters = dh.generate_parameters(generator=2, key_size=512, backend=default_backend())
 
@@ -69,7 +81,10 @@ class Crypto:
         self.public_key=a_peer_public_key.public_bytes(crypto_serialization.Encoding.PEM,crypto_serialization.PublicFormat.SubjectPublicKeyInfo)
 
         return(self.public_key,p,g,y)
-        
+    
+    """
+    Called to generate the MAC of a message with a digest function.
+    """
     def mac_gen (self,my_text):
 
         if(self.digest=="SHA256"):
@@ -89,8 +104,9 @@ class Crypto:
         
         self.mac=binascii.hexlify(h.finalize()) 
 
-
-    
+    """
+    Digest generation function.
+    """
     def digest_gen(self):
 
         if(self.digest=="SHA256"):
@@ -117,7 +133,7 @@ class Crypto:
     """
     Symmetric key generation.
 
-    It derivates the shared key created with Diffie-Helman
+    It derivates the shared key created with Diffie-Helman.
     """
     def symmetric_key_gen(self):
         
@@ -153,10 +169,9 @@ class Crypto:
             self.symmetric_key = key[:64]
         
     """
-    File encryption
+    File encryption with symmetric ciphers AES, 3DES or ChaCha20 with ECB or CBC cipher modes.
 
     @param file_name: file to encrypt
-    
     """
     def file_encryption(self, data):
         backend = default_backend()
@@ -200,8 +215,10 @@ class Crypto:
         criptogram = encryptor.update(data)
         return criptogram
 
-       
-
+    """
+    File decryption with symmetric ciphers AES, 3DES or ChaCha20 with ECB or CBC cipher modes.
+    """
+    
     def decryption(self, data,iv=None):
         backend = default_backend() 
         cipher = None

@@ -113,6 +113,7 @@ class ClientHandler(asyncio.Protocol):
 		mtype = message.get('type', "").upper()
 		error=None
 
+<<<<<<< HEAD
 		if mtype == 'OPEN':
 			if self.state==STATE_DH: # Check if statte equal DH
 				ret = self.process_open(message)
@@ -121,13 +122,15 @@ class ClientHandler(asyncio.Protocol):
 				self.state = STATE_OPEN
 
 				ret=True
+=======
+>>>>>>> 087e709cece7aaed6332a5456ef3b4c830349201
 
-		elif mtype == 'SECURE_X':
+		if mtype == 'SECURE_X':
 			self.encrypted_data += message['payload']
 			
 			ret = True
 
-		elif mtype=='MAC':
+		elif mtype == 'MAC':
 			
 			(ret,error)= self.process_mac(message)
 			
@@ -141,7 +144,7 @@ class ClientHandler(asyncio.Protocol):
 
 				self.process_secure()
 
-		elif mtype=='NEGOTIATION':
+		elif mtype == 'NEGOTIATION':
 			logger.debug('Negotiation received')
 			(ret,error) = self.process_negotiation(message)
 			self.state=STATE_NEGOTIATION
@@ -152,7 +155,7 @@ class ClientHandler(asyncio.Protocol):
 			logger.debug('DH ROTATION RECEIVED')
 			ret=self.process_dh_parameters(message)
 
-			#Generate a symetric key
+			# Generate a symetric key
 			self.crypto.symmetric_key_gen()
 			logger.debug("Key: {}".format(self.crypto.symmetric_key))
 
@@ -166,10 +169,6 @@ class ClientHandler(asyncio.Protocol):
 
 		
 
-		elif mtype == 'DATA':
-			ret = self.process_data(message)
-		elif mtype == 'CLOSE':
-			ret = self.process_close(message)
 		else:
 			logger.warning("Invalid message type: {}".format(message['type']))
 			ret = False
@@ -191,67 +190,67 @@ class ClientHandler(asyncio.Protocol):
 	def process_mac(self,message: str) -> bool:
 		logger.debug("Process MAC: {}".format(message))
 
-		client_mac=base64.b64decode(message['data'])
-		#Generate server MAC
+		client_mac = base64.b64decode(message['data'])
+		# Generate server MAC
 		self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
 		logger.debug("Client mac: {}".format(base64.b64decode(client_mac)))
 		logger.debug("Server mac: {}".format(self.crypto.mac))
 
-		if client_mac==self.crypto.mac:
+		if client_mac == self.crypto.mac:
 			logger.info("Integrity controll: Success")
-			return (True,None)
+			return (True, None)
 		else:
-			return (False,'Integrity control failed.')
+			return (False, 'Integrity control failed.')
 		
 	
 	def process_dh_parameters(self,message: str) -> bool:
 		logger.debug("Process DH parameters: {}".format(message))
 
-		y=message['parameters']['y']
-		g=message['parameters']['g']
-		p=message['parameters']['p']
-		bytes_public_key=bytes(message['parameters']['public_key'],'ISO-8859-1')
+		y = message['parameters']['y']
+		g = message['parameters']['g']
+		p = message['parameters']['p']
+		bytes_public_key = bytes(message['parameters']['public_key'], 'ISO-8859-1')
 
 		try:
 			ret=self.crypto.diffie_helman_server(p,g,y,bytes_public_key)
 			return ret
-		except :
+		except:
 			return False
 			
 	def process_negotiation(self,message: str) -> bool:
 		logger.debug("Process Negotiation: {}".format(message))
-		choosen_chipher=None
-		choosen_mode=None
-		choosen_digest=None
-		flag=None
+		choosen_chipher = None
+		choosen_mode = None
+		choosen_digest = None
+		flag = None
 
 		for cipher in self.symetric_ciphers:
 			if cipher in message['algorithms']['symetric_ciphers']:
-				choosen_chipher=cipher
+				choosen_chipher = cipher
 				break
 		
 		for cipher_mode in self.cipher_modes:
 			if cipher_mode in message['algorithms']['chiper_modes']:
-				choosen_mode=cipher_mode
+				choosen_mode = cipher_mode
 				break
 		
 		for digest in self.digest:
 			if digest in message['algorithms']['digest']:
-				choosen_digest=digest
+				choosen_digest = digest
 				break
 		
 		if choosen_chipher is not None and choosen_mode is not None and choosen_digest is not None:
-			#self.choosen_cipher=choosen_chipher
-			#self.choosen_mode=choosen_mode
-			#self.choosen_digest=choosen_digest
+			# self.choosen_cipher=choosen_chipher
+			# self.choosen_mode=choosen_mode
+			# self.choosen_digest=choosen_digest
 
 			self.crypto.symmetric_cipher=choosen_chipher
 			self.crypto.cipher_mode=choosen_mode
 			self.crypto.digest=choosen_digest
 			
-			flag=True
+			flag = True
 		else:
-			flag=False
+			flag = False
 			return (False,"Client algorithms not compatible with server algorithms")
 
 		if flag:
@@ -364,6 +363,7 @@ class ClientHandler(asyncio.Protocol):
 		self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
 		logger.debug("My MAC: {}".format(self.crypto.mac))
 		self.transport.close()
+		
 		if self.file is not None:
 			self.file.close()
 			self.file = None
@@ -384,6 +384,7 @@ class ClientHandler(asyncio.Protocol):
 				self._send({'type': 'OK'})
 				self.state = STATE_OPEN
 				ret=True
+				
 		elif mtype == 'DATA':
 			message = {'type': 'DATA', 'data': ''}
 			for msg in self.decrypted_data:
@@ -391,6 +392,7 @@ class ClientHandler(asyncio.Protocol):
 			ret = self.process_data(message)
 		elif mtype == 'CLOSE':
 			ret = self.process_close(message)
+
 		else:
 			logger.warning("Invalid message type: {}".format(message['type']))
 			ret = False
@@ -463,5 +465,4 @@ def main():
 
 if __name__ == '__main__':
 	main()
-
 

@@ -21,39 +21,42 @@ STATE_NEGOTIATION=5
 STATE_DH=6
 
 
-
 class ClientProtocol(asyncio.Protocol):
     """
     Client that handles a single client
     """
-
     def __init__(self, file_name, loop):
         """
         Default constructor
-        :param file_name: Name of the file to send
-        :param loop: Asyncio Loop to use
+
+        @param file_name: Name of the file to send
+        @param loop: Asyncio Loop to use
         """
 
         self.file_name = file_name
         self.loop = loop
-        self.chunk_count=0
-        self.last_pos=0
-        self.symetric_ciphers=['AES','3DES']
-        self.cipher_modes=['ECB','CBC']
-        self.digest=['SHA256','SHA384','MD5','SHA512','BLAKE2']
+        self.chunk_count = 0
+        self.last_pos = 0
+        self.symetric_ciphers = ['AES', '3DES']
+        self.cipher_modes = ['ECB', 'CBC']
+        self.digest = ['SHA256', 'SHA384', 'MD5', 'SHA512', 'BLAKE2']
         self.state = STATE_CONNECT  # Initial State
         self.buffer = ''  # Buffer to receive data chunks
-        self.choosen_cipher=None
-        self.choosen_mode=None
-        self.choosen_digest=None
+        self.choosen_cipher = None
+        self.choosen_mode = None
+        self.choosen_digest = None
 
         self.crypto = Crypto(self.choosen_cipher, self.choosen_mode, self.choosen_digest)
 
         self.encrypted_data = ''
     
-    def encrypt_payload(self, message):
-        secure_message = {'type': 'SECURE_X', 'payload': None}
+    def encrypt_payload(self, message: dict) -> None:
+        """
+        Called when a secure message will be sent, in order to encrypt its payload.
 
+        @param message: JSON message of type OPEN, DATA or CLOSE
+        """
+        secure_message = {'type': 'SECURE_X', 'payload': None}
         payload = json.dumps(message).encode()
         criptogram = self.crypto.file_encryption(payload)
         secure_message['payload'] = base64.b64encode(criptogram).decode()
@@ -61,7 +64,10 @@ class ClientProtocol(asyncio.Protocol):
 
         return secure_message
     
-    def send_mac(self):
+    def send_mac(self) -> None:
+        """
+        Called when a secure message is sent and a MAC is necessary to check message authenticity.
+        """
         self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
         logger.debug("My MAC: {}".format(self.crypto.mac))
         if self.crypto.iv is None:
@@ -77,8 +83,7 @@ class ClientProtocol(asyncio.Protocol):
         """
         Called when the client connects.
 
-        :param transport: The transport stream to use for this client
-        :return: No return
+        @param transport: The transport stream to use for this client
         """
         self.transport = transport
 
@@ -99,8 +104,7 @@ class ClientProtocol(asyncio.Protocol):
         Called when data is received from the server.
         Stores the data in the buffer
 
-        :param data: The data that was received. This may not be a complete JSON message
-        :return:
+        @param data: The data that was received. This may not be a complete JSON message
         """
         logger.debug('Received: {}'.format(data))
         try:
@@ -126,11 +130,10 @@ class ClientProtocol(asyncio.Protocol):
         """
         Processes a frame (JSON Object)
 
-        :param frame: The JSON Object to process
-        :return:
+        @param frame: The JSON Object to process
         """
-
         logger.debug("Frame: {}".format(frame))
+
         try:
             message = json.loads(frame)
         except:
@@ -169,7 +172,7 @@ class ClientProtocol(asyncio.Protocol):
             #Create shared key with the server public key
             self.crypto.create_shared_key(public_key)
             
-            #Generate a symetric key
+            # Generate a symetric key
             self.crypto.symmetric_key_gen()
             logger.debug("Key: {}".format(self.crypto.symmetric_key))
             if self.state==STATE_KEY_ROTATION:
@@ -187,13 +190,14 @@ class ClientProtocol(asyncio.Protocol):
 
         elif mtype == 'NEGOTIATION_RESPONSE':
             logger.info("Negotiation response")
-            #Receive the choosen algorithms by the server 
+
+            # Receive the choosen algorithms by the server 
             self.process_negotiation_response(message)
-            #Generate Diffie Helman client private and public keys
+
+            # Generate Diffie Helman client private and public keys
             bytes_public_key,p,g,y=self.crypto.diffie_helman_client()
             
-            
-            message={'type':'DH_PARAMETERS','parameters':{'p':p,'g':g,'y':y,'public_key':str(bytes_public_key,'ISO-8859-1')}}
+            message = {'type':'DH_PARAMETERS','parameters':{'p':p,'g':g,'y':y,'public_key':str(bytes_public_key,'ISO-8859-1')}}
             self._send(message)
             self.state=STATE_DH
             
@@ -203,14 +207,19 @@ class ClientProtocol(asyncio.Protocol):
         
     
 
-
         else:
             logger.warning("Invalid message type")
+
         logger.debug('CLosing')
         self.transport.close()
         self.loop.stop()
 
-    def process_negotiation_response(self,message: str) -> bool:
+    def process_negotiation_response(self, message: str) -> bool:
+        """
+        Called when a response of type NEGOTIATION is received.
+
+        @param message: Received message
+        """
         logger.debug("Process Negotiation: {}".format(message))
 
         self.crypto.symmetric_cipher=message['chosen_algorithms']['symetric_cipher']
@@ -219,13 +228,10 @@ class ClientProtocol(asyncio.Protocol):
 
         logger.info("Choosen algorithms: {} {} {}".format(self.crypto.symmetric_cipher,self.crypto.cipher_mode,self.crypto.digest))
 		
-
-    
     def connection_lost(self, exc):
         """
         Connection was lost for some reason.
-        :param exc:
-        :return:
+        @param exc:
         """
         logger.info('The server closed the connection')
         self.loop.stop()
@@ -234,8 +240,7 @@ class ClientProtocol(asyncio.Protocol):
         """
         Sends a file to the server.
         The file is read in chunks, encoded to Base64 and sent as part of a DATA JSON message
-        :param file_name: File to send
-        :return:  None
+        @param file_name: File to send
         """
 
         with open(file_name, 'rb') as f:
@@ -243,7 +248,7 @@ class ClientProtocol(asyncio.Protocol):
             file_ended = False
             read_size = 16 * 60 #TODO read_size depends on the alg you are using, AES=16*60, 3DES=8*60, but maybe we dont have to change because the encrypt already deals with that
             while True:
-                if self.last_pos!=0:
+                if self.last_pos != 0:
                     f.seek(self.last_pos)
                     self.last_pos=0
 
@@ -271,26 +276,18 @@ class ClientProtocol(asyncio.Protocol):
                 self._send(secure_message)
                 self.send_mac()
                 
-
-
                 if len(data) != read_size:
                     file_ended=True
                     break
             
             logger.debug("Chunks: {}".format(self.chunk_count))
-            #When it ends create MAC
+            # When it ends create MAC
             if file_ended:
-                self._send({'type': 'CLOSE'})
+                self._send(self.encrypt_payload({'type': 'CLOSE'}))
+                self.send_mac()
                 logger.info("File transferred. Closing transport")
                 self.transport.close()
-            
-
-            '''
-            self._send({'type': 'CLOSE'})
-            logger.info("File transferred. Closing transport")
-            self.transport.close()
-            '''
-
+        
     def _send(self, message: str) -> None:
         """
         Effectively encodes and sends a message
@@ -301,7 +298,6 @@ class ClientProtocol(asyncio.Protocol):
 
         message_b = (json.dumps(message) + '\r\n').encode()
         self.transport.write(message_b)
-
 
 def main():
     parser = argparse.ArgumentParser(description='Sends files to servers.')
