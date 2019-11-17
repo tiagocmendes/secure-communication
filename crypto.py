@@ -165,7 +165,7 @@ class Crypto:
         
         elif self.cipher_mode == 'CBC':
             # FIXME initialization vector
-            mode = modes.CBC(b"a" * 16)
+            mode = modes.CBC(os.urandom(16))
         
         if self.symmetric_cipher == 'AES':
             block_size = algorithms.AES(self.symmetric_key).block_size
@@ -208,7 +208,7 @@ class Crypto:
         
         elif self.cipher_mode == 'CBC':
             # FIXME initialization vector
-            mode = modes.CBC(b"a" * 16)
+            mode = modes.CBC(os.urandom(16))
 
         if self.symmetric_cipher == 'AES':
             block_size = algorithms.AES(self.symmetric_key).block_size
