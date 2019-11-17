@@ -280,12 +280,8 @@ class ClientProtocol(asyncio.Protocol):
                 secure_message = self.encrypt_payload(message)
                 
                 self._send(secure_message)
-                #self.send_mac()
-                self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
-                logger.debug("My MAC: {}".format(self.crypto.mac))
-                message = {'type': 'MAC', 'data': "Joao"}
-                self._send(message)
-                self.encrypted_data = ''
+                self.send_mac()
+                
 
 
                 if len(data) != read_size:
