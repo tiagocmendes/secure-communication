@@ -62,3 +62,73 @@ Para cumprir os objetivos pretendidos com a realização deste projeto, primeiro
 De seguida, apresenta-se um **diagrama de sequências UML**, ilustrando todas as mensagens trocadas entre o *cliente* e o *servidor*:
 
 ![message-workflow](message-workflow.png)
+
+
+## 3. Negociação dos algoritmos utilizados
+
+A sessão entre o *cliente* e o *servidor* inicia-se com a negociação do **algoritmo de cifra**, **modo de cifra** e **função de síntese** a utilizar. Para tal, o cliente informa o servidor dos algoritmos que possui através de uma mensagem do tipo `NEGOTIATION`:
+
+```python
+algorithms = dict()
+algorithms['symetric_ciphers'] = self.symetric_ciphers
+algorithms['chiper_modes'] = self.cipher_modes
+algorithms['digest'] = self.digest
+
+message = {'type': 'NEGOTIATION', 'algorithms': algorithms}
+self._send(message)
+```
+
+O *servidor*, ao receber e processar esta mensagem, verifica quais os algoritmos deste conjunto que tem disponíveis e informa o *cliente* através de uma mensagem do tipo `NEGOTIATION_RESPONSE` quais os algoritmos escolhidos:
+
+```python
+chosen_algorithms = dict()
+chosen_algorithms['symetric_ciphers'] = self.crypto.symmetric_cipher
+chosen_algorithms['chiper_modes'] = self.crypto.cipher_mode
+chosen_algorithms['digest'] = self.crypto.digest
+message = {'type': 'NEGOTIATION_RESPONSE','chosen_algorithms': chosen_algorithms}
+self._send(message)
+```
+
+**Nota:** A variável `self.crypto` é um objeto da classe `Crypto`, desenvolvida por nós, com todo o processamento criptográfico da nossa solução.  
+
+Após receber a mensagem com os algoritmos a utilizar durante a sessão, o *cliente* termina a etapa de **negociação de algoritmos** e dá início ao processo de **troca de chaves** através do algoritmo de **Diffie Hellman**.  
+
+De seguida seguem-se capturas de ecrã do funcionamento desta etapa, tanto no *cliente* como no *servidor*.
+
+![cliente]
+![servidor]
+
+
+## 4. Troca de chaves utilizando o algoritmo Diffie Hellman  
+
+No seguimento do ponto anterior, o *cliente* inicia o processo de **troca de chaves** através do algoritmo de **Diffie Hellman**. 
+
+**NÃO TERMINADO**
+
+## 5. Confidencialidade
+
+Após a troca de chaves descrita no ponto anterior, o *cliente* dá início à troca de informação através do envio de uma mensagem do tipo `OPEN`:
+
+```python
+message = {'type': 'OPEN', 'file_name': self.file_name}
+```
+
+No entanto, esta forma de enviar a mensagem **não é de todo segura.** Portanto, e visto que se pode proceder à **encriptação** e **desencriptação** através das chaves simétricas partilhadas, o *cliente* irá enviar uma nova mensagem do tipo `SECURE_X`, que irá ter como `'payload'` a mensagem do tipo `OPEN` encriptada:  
+
+```python
+secure_message = {'type': 'SECURE_X', 'payload': None}
+payload = json.dumps(message).encode()
+criptogram = self.crypto.file_encryption(payload)
+secure_message['payload'] = base64.b64encode(criptogram).decode()
+self._send(message)
+```
+
+**Nota:** Com o intuito de simplificar a explicação, este pedaço de código foi adaptado, não estando rigorosamente igual ao da solução entregue.
+
+A função `self.crypto.file_encryption(payload)`, semelhante à desenvolvida nas aulas práticas da unidade curricular, encripta um conjunto de **bytes** segundo o *algoritmo de cifra simétrica* e o *modo de cifra* escolhidos no *processo de negociação*, corrigindo o **block_size** do último bloco através de um **padding,** retornando por fim o criptograma.
+
+O *servidor*, ao receber a mensagem do tipo `SECURE_X`, guarda o conteúdo do campo `'payload'` na variável `self.encrypted_data` (que será útil na transferência do ficheiro, como explicado mais à frente). De seguida, e **só após** confirmar a **integridade da mensagem** (também explicado mais à frente), o *servidor* desencripta o `'payload'` e processa a mensagem, neste caso do tipo `OPEN`, com o código já fornecido (podendo ser também do tipo `DATA` ou `CLOSE`).  
+
+Esta lógica de encriptação e desencriptação de mensagens está implementada tanto no *cliente* como no *servidor*. Assim, pode-se garantir a **confidencialidade** das mensagens trocadas.
+
+## 6. Controlo de integridade
