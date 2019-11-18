@@ -37,7 +37,7 @@ class ClientProtocol(asyncio.Protocol):
         self.loop = loop
         self.chunk_count = 0
         self.last_pos = 0
-        self.symetric_ciphers = ['3DES']
+        self.symetric_ciphers = ['ChaCha20','AES','3DES']
         self.cipher_modes = ['CBC','ECB','GCM']
         self.digest = ['SHA384','SHA256','SHA512','MD5','BLAKE2']
         self.state = STATE_CONNECT  # Initial State
