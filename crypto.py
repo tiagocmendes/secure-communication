@@ -63,6 +63,7 @@ class Crypto:
 
     """
     Called to create a shared key between the client and the server in the Diffie Hellman algorithm.
+    @param bytes_public_key: public component
     """
     def create_shared_key(self, bytes_public_key):
         public_key_server=crypto_serialization.load_pem_public_key(bytes_public_key,backend=default_backend())
@@ -86,6 +87,7 @@ class Crypto:
     
     """
     Called to generate the MAC of a message with a digest function.
+    @param my_text: text to generate MAC
     """
     def mac_gen (self,my_text):
 
@@ -143,28 +145,28 @@ class Crypto:
             self.symmetric_key = key[:32]
         
     """
-    File encryption with symmetric ciphers AES, 3DES or ChaCha20 with ECB or CBC cipher modes.
+    File encryption with symmetric ciphers AES, 3DES or ChaCha20 with ECB,CBC or GCM cipher modes.
 
-    @param file_name: file to encrypt
+    @param data: data to encrypt
     """
-    def file_encryption(self, data,associated_data=None):
+    def file_encryption(self, data):
         backend = default_backend()
         cipher = None 
         block_size = 0
         mode = None
         
-        if self.cipher_mode == 'ECB':
-            mode = modes.ECB()
-        elif self.cipher_mode == 'GCM':
-            self.iv=os.urandom(16)
-            mode = modes.GCM(self.iv)
-        elif self.cipher_mode == 'CBC':
-            if self.symmetric_cipher=='3DES':
-                self.iv=os.urandom(8)
-            elif self.symmetric_cipher == 'AES':
+        if self.symmetric_cipher!='ChaCha20':
+            if self.cipher_mode == 'ECB':
+                mode = modes.ECB()
+            elif self.cipher_mode == 'GCM':
                 self.iv=os.urandom(16)
-
-            mode = modes.CBC(self.iv)
+                mode = modes.GCM(self.iv)
+            elif self.cipher_mode == 'CBC':
+                if self.symmetric_cipher=='3DES':
+                    self.iv=os.urandom(8)
+                elif self.symmetric_cipher == 'AES':
+                    self.iv=os.urandom(16)
+                mode = modes.CBC(self.iv)
         
         if self.symmetric_cipher == 'AES':
             block_size = algorithms.AES(self.symmetric_key).block_size
@@ -197,7 +199,6 @@ class Crypto:
             criptogram = encryptor.update(data)
             self.nonce=nonce
         else:
-            #encryptor.authenticate_additional_data(associated_data)
             criptogram = encryptor.update(data)+encryptor.finalize()
             self.gcm_tag=encryptor.tag
 
@@ -206,21 +207,25 @@ class Crypto:
 
     """
     File decryption with symmetric ciphers AES, 3DES or ChaCha20 with ECB or CBC cipher modes.
+    @param data: data to decrypt
+    @param iv: iv used in GCM or CBC
+    @param tag: GCM tag
+    @param nonce: ChaCha20 nonce
     """
     
-    def decryption(self, data,iv=None,tag=None,associated_data=None,nonce=None):
+    def decryption(self, data,iv=None,tag=None,nonce=None):
         backend = default_backend() 
         cipher = None
         block_size = 0
 
-        if self.cipher_mode == 'ECB':
-            mode = modes.ECB()
-        elif self.cipher_mode == 'GCM':
-            self.iv=os.urandom(16)
-            mode = modes.GCM(iv,tag)
-        elif self.cipher_mode == 'CBC':
-            if iv is not None:
-                mode = modes.CBC(iv)
+        if self.symmetric_cipher!='ChaCha20':
+            if self.cipher_mode == 'ECB':
+                mode = modes.ECB()
+            elif self.cipher_mode == 'GCM':
+                mode = modes.GCM(iv,tag)
+            elif self.cipher_mode == 'CBC':
+                if iv is not None:
+                    mode = modes.CBC(iv)
 
         if self.symmetric_cipher == 'AES':
             block_size = algorithms.AES(self.symmetric_key).block_size
@@ -236,10 +241,6 @@ class Crypto:
             
         decryptor = cipher.decryptor()
 
-        '''if self.cipher_mode=='GCM':
-            decryptor.authenticate_additional_data(associated_data)'''
-       
-    
         ct = decryptor.update(data)+decryptor.finalize()
         
         if self.cipher_mode=='GCM' or self.symmetric_cipher=='ChaCha20':

@@ -37,7 +37,7 @@ class ClientProtocol(asyncio.Protocol):
         self.loop = loop
         self.chunk_count = 0
         self.last_pos = 0
-        self.symetric_ciphers = ['3DES']
+        self.symetric_ciphers = ['ChaCha20','AES','3DES']
         self.cipher_modes = ['CBC','ECB','GCM']
         self.digest = ['SHA384','SHA256','SHA512','MD5','BLAKE2']
         self.state = STATE_CONNECT  # Initial State
@@ -199,18 +199,12 @@ class ClientProtocol(asyncio.Protocol):
                 self.state = STATE_OPEN
                 self.send_file(self.file_name)
                 
-
-
             elif self.state==STATE_DH:
                 secure_message = self.encrypt_payload({'type': 'OPEN', 'file_name': self.file_name})
                 self._send(secure_message)
                 self.send_mac()
                 self.state = STATE_OPEN
 
-            
-            
-           
-            
             return
 
         elif mtype == 'NEGOTIATION_RESPONSE':

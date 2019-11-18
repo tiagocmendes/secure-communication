@@ -38,7 +38,7 @@ class ClientHandler(asyncio.Protocol):
 		self.buffer = ''
 		self.peername = ''
 
-		self.symetric_ciphers=['3DES']
+		self.symetric_ciphers=['ChaCha20','AES','3DES']
 		self.cipher_modes=['CBC','ECB','GCM']
 		self.digest=['SHA384','SHA256','SHA512','MD5','BLAKE2']
 		self.choosen_cipher=None
@@ -145,15 +145,7 @@ class ClientHandler(asyncio.Protocol):
 				if nonce=='':
 					nonce=None
 
-				logger.debug("IV: {}".format(iv))
-				if tag is not None:
-					self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode()),iv,tag,b"HELLO",nonce))
-					
-				else:
-					self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode()),iv,tag,None,nonce))
-					
-
-				
+				self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode()),iv,tag,nonce))
 
 				# process secure message
 				self.process_secure()
@@ -258,19 +250,21 @@ class ClientHandler(asyncio.Protocol):
 				
 				choosen_chipher = cipher
 				break
-		
-		for cipher_mode in self.cipher_modes:
-			if cipher_mode in message['algorithms']['chiper_modes']:
-				if cipher_mode=='GCM' and choosen_chipher!='AES':
-					continue
-				choosen_mode = cipher_mode
-				break
+		if choosen_chipher != 'ChaCha20':
+			for cipher_mode in self.cipher_modes:
+				if cipher_mode in message['algorithms']['chiper_modes']:
+					if cipher_mode=='GCM' and choosen_chipher!='AES':
+						continue
+					choosen_mode = cipher_mode
+					break
+		else:
+			choosen_mode=''
 		
 		for digest in self.digest:
 			if digest in message['algorithms']['digest']:
 				choosen_digest = digest
 				break
-		
+		print(f"Teste: {choosen_chipher} {choosen_mode} {choosen_digest}")
 		if choosen_chipher is not None and choosen_mode is not None and choosen_digest is not None:
 			# self.choosen_cipher=choosen_chipher
 			# self.choosen_mode=choosen_mode
@@ -320,7 +314,7 @@ class ClientHandler(asyncio.Protocol):
 				return False
 
 		try:
-			self.file = open(file_name, "wb") #TODO append bytes
+			self.file = open(file_path, "wb") #TODO append bytes
 			logger.info("File open")
 		except Exception:
 			logger.exception("Unable to open file")
