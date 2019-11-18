@@ -90,15 +90,15 @@ class Crypto:
     def mac_gen (self,my_text):
 
         if(self.digest=="SHA256"):
-            h=hmac.HMAC(self.shared_key, hashes.SHA256(), backend=default_backend())
+            h=hmac.HMAC(self.symmetric_key, hashes.SHA256(), backend=default_backend())
         elif(self.digest=="SHA384"):
-            h=hmac.HMAC(self.shared_key, hashes.SHA384(), backend=default_backend())
+            h=hmac.HMAC(self.symmetric_key, hashes.SHA384(), backend=default_backend())
         elif(self.digest=="MD5"):
-            h=hmac.HMAC(self.shared_key, hashes.MD5(), backend=default_backend())
+            h=hmac.HMAC(self.symmetric_key, hashes.MD5(), backend=default_backend())
         elif(self.digest=="SHA512"):
-            h=hmac.HMAC(self.shared_key, hashes.SHA512(), backend=default_backend())
+            h=hmac.HMAC(self.symmetric_key, hashes.SHA512(), backend=default_backend())
         elif(self.digest=="BLAKE2"):
-            h=hmac.HMAC(self.shared_key, hashes.BLAKE2b(64), backend=default_backend())
+            h=hmac.HMAC(self.symmetric_key, hashes.BLAKE2b(64), backend=default_backend())
 
 
         h.update(my_text) 
@@ -106,31 +106,6 @@ class Crypto:
         
         self.mac=binascii.hexlify(h.finalize()) 
 
-    """
-    Digest generation function.
-    """
-    def digest_gen(self):
-
-        if(self.digest=="SHA256"):
-            digest_generated = hashes.Hash(hashes.SHA256(), backend=default_backend())
-        elif(self.digest=="SHA384"):
-            digest_generated = hashes.Hash(hashes.SHA384(), backend=default_backend())
-        elif(self.digest=="MD5"):
-            digest_generated = hashes.Hash(hashes.MD5(), backend=default_backend())
-        elif(self.digest=="SHA512"):
-            digest_generated = hashes.Hash(hashes.SHA512(), backend=default_backend())
-        elif(self.digest=="BLAKE2"):
-            digest_generated = hashes.Hash(hashes.BLAKE2b(64), backend=default_backend())
-        
-        with open(self.encrypted_file_name,"rb") as fr:
-            my_text=fr.read(1024)
-            digest_generated.update(my_text)
-            while my_text:
-                my_text=fr.read(1024)
-                digest_generated.update(my_text)
-                
-      
-        self.mic=binascii.hexlify(digest.finalize()) # TODO Create MAC
     
     """
     Symmetric key generation.
@@ -168,7 +143,7 @@ class Crypto:
         elif self.symmetric_cipher == '3DES':
             self.symmetric_key = key[:8]
         elif self.symmetric_cipher == 'ChaCha20':
-            self.symmetric_key = key[:64]
+            self.symmetric_key = key[:32]
         
     """
     File encryption with symmetric ciphers AES, 3DES or ChaCha20 with ECB or CBC cipher modes.
@@ -187,7 +162,6 @@ class Crypto:
             self.iv=os.urandom(16)
             mode = modes.GCM(self.iv)
         elif self.cipher_mode == 'CBC':
-            # FIXME initialization vector
             self.iv=os.urandom(16)
             mode = modes.CBC(self.iv)
         
@@ -214,7 +188,6 @@ class Crypto:
 
             padding = 16 if padding and self.symmetric_cipher == 'AES' == 0 else padding 
             padding = 8 if padding and self.symmetric_cipher == '3DES' == 0 else padding 
-            padding = 64 if padding and self.symmetric_cipher == 'ChaCha20' == 0 else padding 
 
             data += bytes([padding]*padding)
             criptogram = encryptor.update(data)
@@ -223,7 +196,7 @@ class Crypto:
             criptogram = encryptor.update(data)
             self.nonce=nonce
         else:
-            encryptor.authenticate_additional_data(associated_data)
+            #encryptor.authenticate_additional_data(associated_data)
             criptogram = encryptor.update(data)+encryptor.finalize()
             self.gcm_tag=encryptor.tag
 
@@ -264,8 +237,8 @@ class Crypto:
             
         decryptor = cipher.decryptor()
 
-        if self.cipher_mode=='GCM':
-            decryptor.authenticate_additional_data(associated_data)
+        '''if self.cipher_mode=='GCM':
+            decryptor.authenticate_additional_data(associated_data)'''
        
     
         ct = decryptor.update(data)+decryptor.finalize()

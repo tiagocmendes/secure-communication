@@ -38,8 +38,8 @@ class ClientProtocol(asyncio.Protocol):
         self.chunk_count = 0
         self.last_pos = 0
         self.symetric_ciphers = ['ChaCha20','AES','3DES']
-        self.cipher_modes = ['CBC']
-        self.digest = ['SHA256', 'SHA384', 'MD5', 'SHA512', 'BLAKE2']
+        self.cipher_modes = ['CBC','ECB','GCM']
+        self.digest = ['SHA384','SHA256','SHA512','MD5','BLAKE2']
         self.state = STATE_CONNECT  # Initial State
         self.buffer = ''  # Buffer to receive data chunks
         self.choosen_cipher = None
@@ -259,7 +259,7 @@ class ClientProtocol(asyncio.Protocol):
         with open(file_name, 'rb') as f:
             message = {'type': 'DATA', 'data': None}
             file_ended = False
-            read_size = 16 * 60 #TODO read_size depends on the alg you are using, AES=16*60, 3DES=8*60, but maybe we dont have to change because the encrypt already deals with that
+            read_size = 16 * 60 
             while True:
                 if self.last_pos != 0:
                     f.seek(self.last_pos)
@@ -269,13 +269,10 @@ class ClientProtocol(asyncio.Protocol):
                     logger.debug("1000 chunks")
                     #Generate Diffie Helman client private and public keys
                     bytes_public_key,p,g,y=self.crypto.diffie_helman_client()
-                    
-                    
                     message={'type':'DH_PARAMETERS','parameters':{'p':p,'g':g,'y':y,'public_key':str(bytes_public_key,'ISO-8859-1')}}
                     self.chunk_count=0
                     self.last_pos=f.tell()
                     self.state=STATE_KEY_ROTATION
-
                     self._send(message)
                     break
 

@@ -39,8 +39,8 @@ class ClientHandler(asyncio.Protocol):
 		self.peername = ''
 
 		self.symetric_ciphers=['ChaCha20','AES','3DES']
-		self.cipher_modes=['CBC']
-		self.digest=['SHA256','SHA384','MD5','SHA512','BLAKE2']
+		self.cipher_modes=['CBC','ECB','GCM']
+		self.digest=['SHA384','SHA256','SHA512','MD5','BLAKE2']
 		self.choosen_cipher=None
 		self.choosen_mode=None
 		self.choosen_digest=None
