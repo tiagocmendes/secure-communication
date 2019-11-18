@@ -316,7 +316,7 @@ class ClientHandler(asyncio.Protocol):
 				return False
 
 		try:
-			self.file = open(file_name, "wb") #TODO append bytes
+			self.file = open(file_path, "wb") #TODO append bytes
 			logger.info("File open")
 		except Exception:
 			logger.exception("Unable to open file")

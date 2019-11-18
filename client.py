@@ -193,18 +193,12 @@ class ClientProtocol(asyncio.Protocol):
                 self.state = STATE_OPEN
                 self.send_file(self.file_name)
                 
-
-
             elif self.state==STATE_DH:
                 secure_message = self.encrypt_payload({'type': 'OPEN', 'file_name': self.file_name})
                 self._send(secure_message)
                 self.send_mac()
                 self.state = STATE_OPEN
 
-            
-            
-           
-            
             return
 
         elif mtype == 'NEGOTIATION_RESPONSE':
