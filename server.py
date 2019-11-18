@@ -38,8 +38,8 @@ class ClientHandler(asyncio.Protocol):
 		self.buffer = ''
 		self.peername = ''
 
-		self.symetric_ciphers=['AES','3DES']
-		self.cipher_modes=['GCM']
+		self.symetric_ciphers=['ChaCha20','AES','3DES']
+		self.cipher_modes=['CBC']
 		self.digest=['SHA256','SHA384','MD5','SHA512','BLAKE2']
 		self.choosen_cipher=None
 		self.choosen_mode=None
@@ -132,17 +132,24 @@ class ClientHandler(asyncio.Protocol):
 			if ret:
 				iv=base64.b64decode(message['iv'])
 				tag=base64.b64decode(message['tag'])
+				nonce=base64.b64decode(message['nonce'])
+
+				if iv=='':
+					iv=None
+				if tag=='':
+					tag=None
+				if nonce=='':
+					nonce=None
 
 				logger.debug("IV: {}".format(iv))
-				if iv!='' and tag!='':
-					self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode()),iv,tag,b"HELLO"))
-					teste=self.crypto.decryption(base64.b64decode(self.encrypted_data.encode()),iv,tag,b"HELLO")
-					print(f"Decrypted data: {teste} ")
-
-				elif iv!='':
-					self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode()),iv))
+				if tag is not None:
+					self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode()),iv,tag,b"HELLO",nonce))
+					
 				else:
-					self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode())))
+					self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode()),iv,tag,None,nonce))
+					
+
+				
 
 				# process secure message
 				self.process_secure()

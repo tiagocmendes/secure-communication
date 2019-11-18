@@ -36,6 +36,7 @@ class Crypto:
         self.mac=None
         self.iv=None
         self.gcm_tag=None
+        self.nonce=None
         self.encrypted_file_name="encrypted_file.txt"
     
     """
@@ -207,16 +208,8 @@ class Crypto:
         
         
         encryptor = cipher.encryptor()
-        if self.symmetric_cipher != 'ChaCha20':
-            padding = block_size - len(data) % block_size
-
-            padding = 16 if padding and self.symmetric_cipher == 'AES' == 0 else padding 
-            padding = 8 if padding and self.symmetric_cipher == '3DES' == 0 else padding 
-            padding = 64 if padding and self.symmetric_cipher == 'ChaCha20' == 0 else padding 
-
-            data += bytes([padding]*padding)
-        criptogram = encryptor.update(data)
-        if self.cipher_mode!='GCM':
+        
+        if self.cipher_mode!='GCM' and self.symmetric_cipher != 'ChaCha20':
             padding = block_size - len(data) % block_size
 
             padding = 16 if padding and self.symmetric_cipher == 'AES' == 0 else padding 
@@ -225,7 +218,10 @@ class Crypto:
 
             data += bytes([padding]*padding)
             criptogram = encryptor.update(data)
-
+        elif self.symmetric_cipher == 'ChaCha20':
+          
+            criptogram = encryptor.update(data)
+            self.nonce=nonce
         else:
             encryptor.authenticate_additional_data(associated_data)
             criptogram = encryptor.update(data)+encryptor.finalize()
@@ -238,7 +234,7 @@ class Crypto:
     File decryption with symmetric ciphers AES, 3DES or ChaCha20 with ECB or CBC cipher modes.
     """
     
-    def decryption(self, data,iv=None,tag=None,associated_data=None):
+    def decryption(self, data,iv=None,tag=None,associated_data=None,nonce=None):
         backend = default_backend() 
         cipher = None
         block_size = 0
@@ -261,7 +257,6 @@ class Crypto:
             block_size = algorithms.TripleDES(self.symmetric_key).block_size
             cipher = Cipher(algorithms.TripleDES(self.symmetric_key), mode, backend=backend)
         elif self.symmetric_cipher == 'ChaCha20':
-            nonce = os.urandom(16)
             algorithm = algorithms.ChaCha20(self.symmetric_key, nonce)
             cipher = Cipher(algorithm, mode=None, backend=default_backend())
         else:
@@ -275,6 +270,6 @@ class Crypto:
     
         ct = decryptor.update(data)+decryptor.finalize()
         
-        if self.cipher_mode=='GCM':
+        if self.cipher_mode=='GCM' or self.symmetric_cipher=='ChaCha20':
             return ct
         return ct[:-ct[-1]]

@@ -37,8 +37,8 @@ class ClientProtocol(asyncio.Protocol):
         self.loop = loop
         self.chunk_count = 0
         self.last_pos = 0
-        self.symetric_ciphers = ['AES','3DES']
-        self.cipher_modes = ['GCM']
+        self.symetric_ciphers = ['ChaCha20','AES','3DES']
+        self.cipher_modes = ['CBC']
         self.digest = ['SHA256', 'SHA384', 'MD5', 'SHA512', 'BLAKE2']
         self.state = STATE_CONNECT  # Initial State
         self.buffer = ''  # Buffer to receive data chunks
@@ -83,7 +83,12 @@ class ClientProtocol(asyncio.Protocol):
         else:
             tag=base64.b64encode(self.crypto.gcm_tag).decode()
 
-        message = {'type': 'MAC', 'data': base64.b64encode(self.crypto.mac).decode(), 'iv':iv,'tag':tag}
+        if self.crypto.nonce is None:
+            nonce=''
+        else:
+            nonce=base64.b64encode(self.crypto.nonce).decode()
+
+        message = {'type': 'MAC', 'data': base64.b64encode(self.crypto.mac).decode(), 'iv':iv,'tag':tag,'nonce':nonce}
         self._send(message)
         self.encrypted_data = ''
 
