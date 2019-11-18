@@ -225,13 +225,12 @@ class ClientHandler(asyncio.Protocol):
 		"""
 		logger.debug("Process DH parameters: {}".format(message))
 
-		y = message['parameters']['y']
 		g = message['parameters']['g']
 		p = message['parameters']['p']
 		bytes_public_key = bytes(message['parameters']['public_key'], 'ISO-8859-1')
 
 		try:
-			ret = self.crypto.diffie_helman_server(p,g,y,bytes_public_key)
+			ret = self.crypto.diffie_helman_server(p,g,bytes_public_key)
 			return ret
 		except:
 			return False

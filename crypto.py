@@ -47,7 +47,7 @@ class Crypto:
     @param y
     @param bytes_public_key
     """
-    def diffie_helman_server(self, p, g, y, bytes_public_key):
+    def diffie_helman_server(self, p, g, bytes_public_key):
         pn = dh.DHParameterNumbers(p, g)
         parameters = pn.parameters(default_backend())
         self.private_key = parameters.generate_private_key()
@@ -134,9 +134,6 @@ class Crypto:
         )
         
         key = kdf.derive(self.shared_key)
-
-        #Generate IV
-
 
         if self.symmetric_cipher == 'AES':
             self.symmetric_key = key[:16]

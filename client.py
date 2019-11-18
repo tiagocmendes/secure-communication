@@ -210,7 +210,7 @@ class ClientProtocol(asyncio.Protocol):
             # Generate Diffie Helman client private and public keys
             bytes_public_key,p,g,y=self.crypto.diffie_helman_client()
             
-            message = {'type':'DH_PARAMETERS','parameters':{'p':p,'g':g,'y':y,'public_key':str(bytes_public_key,'ISO-8859-1')}}
+            message = {'type':'DH_PARAMETERS','parameters':{'p':p,'g':g,'public_key':str(bytes_public_key,'ISO-8859-1')}}
             self._send(message)
             self.state=STATE_DH
             
@@ -269,7 +269,7 @@ class ClientProtocol(asyncio.Protocol):
                     logger.debug("1000 chunks")
                     #Generate Diffie Helman client private and public keys
                     bytes_public_key,p,g,y=self.crypto.diffie_helman_client()
-                    message={'type':'DH_PARAMETERS','parameters':{'p':p,'g':g,'y':y,'public_key':str(bytes_public_key,'ISO-8859-1')}}
+                    message={'type':'DH_PARAMETERS','parameters':{'p':p,'g':g,'public_key':str(bytes_public_key,'ISO-8859-1')}}
                     self.chunk_count=0
                     self.last_pos=f.tell()
                     self.state=STATE_KEY_ROTATION
