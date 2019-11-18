@@ -37,7 +37,7 @@ class ClientProtocol(asyncio.Protocol):
         self.loop = loop
         self.chunk_count = 0
         self.last_pos = 0
-        self.symetric_ciphers = ['ChaCha20','AES','3DES']
+        self.symetric_ciphers = ['3DES']
         self.cipher_modes = ['CBC','ECB','GCM']
         self.digest = ['SHA384','SHA256','SHA512','MD5','BLAKE2']
         self.state = STATE_CONNECT  # Initial State
@@ -72,7 +72,7 @@ class ClientProtocol(asyncio.Protocol):
         Called when a secure message is sent and a MAC is necessary to check message authenticity.
         """
         self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
-        logger.debug("My MAC: {}".format(self.crypto.mac))
+        #logger.debug("My MAC: {}".format(self.crypto.mac))
         if self.crypto.iv is None:
             iv=''
         else:
@@ -108,7 +108,7 @@ class ClientProtocol(asyncio.Protocol):
        
         self._send(message)
 
-        self.state = STATE_NEGOTIATION # TODO change to another state (STATE_NEGOTIATION)
+        self.state = STATE_NEGOTIATION 
 
     
 
@@ -180,7 +180,7 @@ class ClientProtocol(asyncio.Protocol):
                 self.transport.close()
 
         elif mtype == 'DH_PARAMETERS_RESPONSE':
-            logger.debug('DH_PARAMETERS_ROTATION_RESPONSE')
+            logger.debug('DH_PARAMETERS_RESPONSE')
             public_key=bytes(message['parameters']['public_key'],'ISO-8859-1')
             #Create shared key with the server public key
             self.crypto.create_shared_key(public_key)
@@ -188,16 +188,22 @@ class ClientProtocol(asyncio.Protocol):
             # Generate a symetric key
             self.crypto.symmetric_key_gen()
             logger.debug("Key: {}".format(self.crypto.symmetric_key))
+
             if self.state==STATE_KEY_ROTATION:
+                self.state = STATE_OPEN
                 self.send_file(self.file_name)
+                
+
 
             elif self.state==STATE_DH:
                 secure_message = self.encrypt_payload({'type': 'OPEN', 'file_name': self.file_name})
                 self._send(secure_message)
+                self.send_mac()
+                self.state = STATE_OPEN
+
             
             
-            self.send_mac()
-            self.state = STATE_OPEN
+           
             
             return
 
@@ -265,14 +271,14 @@ class ClientProtocol(asyncio.Protocol):
                     f.seek(self.last_pos)
                     self.last_pos=0
 
-                if self.chunk_count==100:
-                    logger.debug("1000 chunks")
+                if self.chunk_count==1000:
+                    self.state=STATE_KEY_ROTATION
+
                     #Generate Diffie Helman client private and public keys
                     bytes_public_key,p,g,y=self.crypto.diffie_helman_client()
                     message={'type':'DH_PARAMETERS','parameters':{'p':p,'g':g,'public_key':str(bytes_public_key,'ISO-8859-1')}}
                     self.chunk_count=0
                     self.last_pos=f.tell()
-                    self.state=STATE_KEY_ROTATION
                     self._send(message)
                     break
 
@@ -280,7 +286,7 @@ class ClientProtocol(asyncio.Protocol):
                 
                 data = f.read(16 * 60)
                 message['data'] = base64.b64encode(data).decode()
-                logger.debug("Data: {} read size {}".format(data,f.tell()))
+                #logger.debug("Data: {} read size {}".format(data,f.tell()))
                 secure_message = self.encrypt_payload(message)
                 
                 self._send(secure_message)
@@ -290,7 +296,6 @@ class ClientProtocol(asyncio.Protocol):
                     file_ended=True
                     break
             
-            logger.debug("Chunks: {}".format(self.chunk_count))
             # When it ends create MAC
             if file_ended:
                 self._send(self.encrypt_payload({'type': 'CLOSE'}))
@@ -304,7 +309,7 @@ class ClientProtocol(asyncio.Protocol):
         :param message:
         :return:
         """
-        logger.debug("Send: {}".format(message))
+        #logger.debug("Send: {}".format(message))
 
         message_b = (json.dumps(message) + '\r\n').encode()
         self.transport.write(message_b)

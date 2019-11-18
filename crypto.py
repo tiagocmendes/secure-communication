@@ -159,7 +159,11 @@ class Crypto:
             self.iv=os.urandom(16)
             mode = modes.GCM(self.iv)
         elif self.cipher_mode == 'CBC':
-            self.iv=os.urandom(16)
+            if self.symmetric_cipher=='3DES':
+                self.iv=os.urandom(8)
+            elif self.symmetric_cipher == 'AES':
+                self.iv=os.urandom(16)
+
             mode = modes.CBC(self.iv)
         
         if self.symmetric_cipher == 'AES':
@@ -215,9 +219,7 @@ class Crypto:
             self.iv=os.urandom(16)
             mode = modes.GCM(iv,tag)
         elif self.cipher_mode == 'CBC':
-            # FIXME initialization vector
             if iv is not None:
-
                 mode = modes.CBC(iv)
 
         if self.symmetric_cipher == 'AES':
