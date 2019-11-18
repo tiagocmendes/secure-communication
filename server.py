@@ -49,6 +49,12 @@ class ClientHandler(asyncio.Protocol):
 		self.encrypted_data = ''
 		self.decrypted_data = []
 
+	def log_state(self, received):
+		states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']
+		logger.info("------------")
+		logger.info("State: {}".format(states[self.state]))
+		logger.info("Received: {}".format(received))
+
 	def connection_made(self, transport) -> None:
 		"""
 		Called when a client connects
@@ -110,19 +116,17 @@ class ClientHandler(asyncio.Protocol):
 
 		mtype = message.get('type', "").upper()
 		error=None
-
+		self.log_state(mtype)
 		if mtype == 'OPEN':
-			if self.state==STATE_DH: # Check if statte equal DH
+			if self.state == STATE_DH: # Check if state equal DH
 				ret = self.process_open(message)
 			else:
 				self._send({'type': 'OK'})
 				self.state = STATE_OPEN
-
 				ret=True
 
 		if mtype == 'SECURE_X':
 			self.encrypted_data += message['payload']
-			
 			ret = True
 
 		elif mtype == 'MAC':
@@ -454,6 +458,7 @@ class ClientHandler(asyncio.Protocol):
 		:param message:
 		:return:
 		"""
+		logger.info("Send: {}".format(message['type']))
 		logger.debug("Send: {}".format(message))
 
 		message_b = (json.dumps(message) + '\r\n').encode()
@@ -477,7 +482,6 @@ def main():
 	args = parser.parse_args()
 	storage_dir = os.path.abspath(args.storage_dir)
 	level = logging.DEBUG if args.verbose > 0 else logging.INFO
-	level=logging.DEBUG
 
 	port = args.port
 	if port <= 0 or port > 65535:

@@ -50,6 +50,12 @@ class ClientProtocol(asyncio.Protocol):
 
         self.encrypted_data = ''
     
+    def log_state(self, received):
+        states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']
+        logger.info("------------")
+        logger.info("State: {}".format(states[self.state]))
+        logger.info("Received: {}".format(received))
+
     def encrypt_payload(self, message: dict) -> None:
         """
         Called when a secure message will be sent, in order to encrypt its payload.
@@ -155,7 +161,7 @@ class ClientProtocol(asyncio.Protocol):
             return
 
         mtype = message.get('type', None)
-        logger.debug("Type {}".format(mtype))
+        self.log_state(mtype)
         if mtype == 'OK':  # Server replied OK. We can advance the state
             if self.state == STATE_OPEN:
                 logger.info("Channel open")
@@ -208,7 +214,7 @@ class ClientProtocol(asyncio.Protocol):
             return
 
         elif mtype == 'NEGOTIATION_RESPONSE':
-            logger.info("Negotiation response")
+            logger.debug("Negotiation response")
 
             # Receive the choosen algorithms by the server 
             self.process_negotiation_response(message)
@@ -309,7 +315,8 @@ class ClientProtocol(asyncio.Protocol):
         :param message:
         :return:
         """
-        #logger.debug("Send: {}".format(message))
+        logger.info("Send: {}".format(message['type']))
+        logger.debug("Send: {}".format(message))
 
         message_b = (json.dumps(message) + '\r\n').encode()
         self.transport.write(message_b)
@@ -330,7 +337,7 @@ def main():
     args = parser.parse_args()
     file_name = os.path.abspath(args.file_name)
     level = logging.DEBUG if args.verbose > 0 else logging.INFO
-    level=logging.DEBUG
+
     port = args.port
     server = args.server
 
