@@ -12,6 +12,9 @@ from cryptography.hazmat.primitives import serialization as crypto_serialization
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import dh
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography import x509
+from datetime import datetime
+
 
 """
 Class with several cryptography functions.
@@ -38,6 +41,10 @@ class Crypto:
         self.gcm_tag=None
         self.nonce=None
         self.encrypted_file_name="encrypted_file.txt"
+        self.roots = dict()
+        self.intermediate_certs = dict()
+        self.user_cert = dict()
+        self.chain=list()
     
     """
     Called to generate the shared key in the server.
@@ -246,3 +253,38 @@ class Crypto:
         if self.cipher_mode=='GCM' or self.symmetric_cipher=='ChaCha20':
             return ct
         return ct[:-ct[-1]]
+
+    
+    def validate_cert(self,cert):
+        today = datetime.now().timestamp()
+
+        return cert.not_valid_before.timestamp() <= today <= cert.not_valid_after.timestamp()
+
+    def load_cert(self,filename):
+        with open(filename, "rb") as pem_file:
+            pem_data = pem_file.read()
+            cert = x509.load_pem_x509_certificate(pem_data, default_backend())
+
+        if self.validate_cert(cert):
+            return cert
+        
+    def build_issuers(self,chain, cert):
+            chain.append(cert)
+
+            issuer = cert.issuer.rfc4514_string()
+            subject = cert.subject.rfc4514_string()
+            print("----")
+            print(f"Issuer : {issuer}")
+            print(f"Subject : {subject}")
+            print("----")
+
+            if issuer == subject and subject in self.roots:
+                return 
+            
+            if issuer in self.intermediate_certs:
+                return self.build_issuers(chain, self.intermediate_certs[issuer])
+            
+            if issuer in self.roots:
+                return self.build_issuers(chain, self.roots[issuer])
+            
+            return

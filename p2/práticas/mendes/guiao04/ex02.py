@@ -5,6 +5,12 @@ from datetime import datetime
 
 roots = dict()
 intermediate_certs = dict()
+user_cert = dict()
+chain=list()
+
+def validate_revogation_status(cert):
+
+    print(cert.extensions.get_extension_for_class(x509.CRLDistributionPoints))
 
 def validate_cert(cert):
     today = datetime.now().timestamp()
@@ -24,6 +30,10 @@ def build_issuers(chain, cert):
 
         issuer = cert.issuer.rfc4514_string()
         subject = cert.subject.rfc4514_string()
+        print("----")
+        print(f"Issuer : {issuer}")
+        print(f"Subject : {subject}")
+        print("----")
 
         if issuer == subject and subject in roots:
             return 
@@ -51,9 +61,24 @@ def main():
                 roots[cert.subject.rfc4514_string()] = cert
             else: 
                 invalid += 1
-
+                
         
-    print(f"Loaded {len(roots)} valid certificates, {invalid} rejected!")
+    print(f"Loaded {len(roots)} root valid certificates, {invalid} rejected!")
+
+    print("Loading user cert")
+    my_cert=load_cert("server.pem")
+    if my_cert is not None:
+        user_cert[my_cert.subject.rfc4514_string()] = my_cert
+    validate_revogation_status(my_cert)
+
+    print("Loading intermidiate cert")
+    cert=load_cert("intermidiate.pem")
+    if cert is not None:
+        intermediate_certs[cert.subject.rfc4514_string()] = cert
+    print(f"Intermediate cert: {str(intermediate_certs)}")
+
+    build_issuers(chain,my_cert)
+    print(f"Chain : {str(chain)}")
 
 if __name__ == '__main__':
     main()
