@@ -14,6 +14,11 @@ from cryptography.hazmat.primitives.asymmetric import dh
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography import x509
 from datetime import datetime
+import getpass
+import base64
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import utils, rsa, padding
+from cryptography.hazmat.primitives import serialization, hashes
 
 
 """
@@ -288,3 +293,92 @@ class Crypto:
                 return self.build_issuers(chain, self.roots[issuer])
             
             return
+    
+    def key_pair_gen(self, password, length, private_file, public_file):
+        valid_lengths = [1024, 2048, 3072, 4096]
+
+        if length not in valid_lengths:
+            print("ERROR - Not a valid length!")
+            return 
+        
+        password = password.encode()
+
+        private_key = rsa.generate_private_key(
+            public_exponent=65537, 
+            key_size=length,
+            backend=default_backend()
+        )
+
+        pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.BestAvailableEncryption(password)
+        )
+
+        priv_key = pem
+        private_file = open(private_file, 'wb')
+        private_file.write(pem)
+        private_file.close()
+
+        public_key = private_key.public_key()
+        pem = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+
+        pub_key = pem
+        public_file = open(public_file, 'wb')
+        public_file.write(pem)
+        public_file.close()
+
+        return (pub_key, priv_key)
+    
+    def rsa_encryption(self, file_name, key_file, encrypted_file):
+    
+        f = open(file_name, 'r')
+
+        message = b''
+        for line in f:
+            message += line.encode()
+        
+        with open(key_file, "rb") as key_file:
+            public_key = serialization.load_pem_public_key(
+                key_file.read(),
+                backend=default_backend()
+            )
+        
+        ciphertext = public_key.encrypt(
+            message,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+
+        with open(encrypted_file, 'wb') as encrypted_file:
+            encrypted_file.write(ciphertext)
+
+    def rsa_decryption(self, pw, file_name, key_file, decrypted_file):
+    
+        with open(key_file, "rb") as key_file:
+            private_key = serialization.load_pem_private_key(
+                key_file.read(),
+                password=pw.encode(),
+                backend=default_backend()
+            )
+        
+        with open(file_name, 'rb') as file_name:
+            ciphertext = file_name.read()
+
+        plaintext = private_key.decrypt(
+            ciphertext,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+
+        with open(decrypted_file, 'w') as encrypted_file:
+            encrypted_file.write(plaintext.decode())

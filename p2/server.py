@@ -125,6 +125,9 @@ class ClientHandler(asyncio.Protocol):
 				self.state = STATE_OPEN
 				ret=True
 
+		if mtype == 'LOGIN_REQUEST':
+			self.process_login_request(message)
+
 		if mtype == 'SECURE_X':
 			self.encrypted_data += message['payload']
 			ret = True
@@ -188,6 +191,16 @@ class ClientHandler(asyncio.Protocol):
 
 			self.state = STATE_CLOSE
 			self.transport.close()
+
+	def process_login_request(self, message):
+		"""
+		Here, the server must send a challenge to the client.
+		"""
+		print(message)
+		print(self.crypto.key_pair_gen("server_password", 4096, "private_key.key", "public_key.key"))
+
+
+		return False
 
 	def process_mac(self,message: str) -> bool:
 		"""

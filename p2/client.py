@@ -22,6 +22,8 @@ STATE_DH=6
 STATE_VALIDATE_SERVER=7
 
 
+STATE_LOGIN_REQ = 8
+
 class ClientProtocol(asyncio.Protocol):
     """
     Client that handles a single client
@@ -50,6 +52,8 @@ class ClientProtocol(asyncio.Protocol):
         self.crypto = Crypto(self.choosen_cipher, self.choosen_mode, self.choosen_digest)
 
         self.encrypted_data = ''
+
+        self.credentials = {}
     
     def log_state(self, received):
         states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']
@@ -110,14 +114,20 @@ class ClientProtocol(asyncio.Protocol):
         logger.debug('Connected to Server')
         logger.debug('Sending cipher algorithms')
 
-        message = {'type':'NEGOTIATION','algorithms':{'symetric_ciphers':self.symetric_ciphers,'chiper_modes':self.cipher_modes,'digest':self.digest}}
-
+        logger.info('Connection to Server')
+        logger.info('LOGIN_REQUEST')
+        
+        #message = {'type':'NEGOTIATION','algorithms':{'symetric_ciphers':self.symetric_ciphers,'chiper_modes':self.cipher_modes,'digest':self.digest}}
+        
+        self.credentials['username'] = input("Username: ")
+        self.credentials['password'] = getpass.getpass("Password: ")
+        
+        message = {'type': 'LOGIN_REQUEST', 'credentials': self.credentials}
        
         self._send(message)
 
-        self.state = STATE_NEGOTIATION 
+        self.state = STATE_LOGIN_REQ 
 
-    
 
     def data_received(self, data: str) -> None:
         """
