@@ -54,11 +54,12 @@ class ClientProtocol(asyncio.Protocol):
         self.encrypted_data = ''
 
         self.credentials = {}
+        self.server_public_key = None
     
     def log_state(self, received):
         states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']
         logger.info("------------")
-        logger.info("State: {}".format(states[self.state]))
+        #logger.info("State: {}".format(states[self.state]))
         logger.info("Received: {}".format(received))
 
     def encrypt_payload(self, message: dict) -> None:
@@ -118,11 +119,8 @@ class ClientProtocol(asyncio.Protocol):
         logger.info('LOGIN_REQUEST')
         
         #message = {'type':'NEGOTIATION','algorithms':{'symetric_ciphers':self.symetric_ciphers,'chiper_modes':self.cipher_modes,'digest':self.digest}}
-        
-        self.credentials['username'] = input("Username: ")
-        self.credentials['password'] = getpass.getpass("Password: ")
-        
-        message = {'type': 'LOGIN_REQUEST', 'credentials': self.credentials}
+               
+        message = {'type': 'LOGIN_REQUEST'}
        
         self._send(message)
 
@@ -173,7 +171,21 @@ class ClientProtocol(asyncio.Protocol):
 
         mtype = message.get('type', None)
         self.log_state(mtype)
-        if mtype == 'OK':  # Server replied OK. We can advance the state
+
+        if mtype == 'CHALLENGE_REQUEST':
+            self.process_challenge(message)
+            return 
+
+        elif mtype == 'UNKNOWN_USER':
+            logger.info('Server did not recognized username.')
+        
+        elif mtype == 'AUTH_SUCCESS':
+            logger.info('User authenticated with success.')
+        
+        elif mtype == 'AUTH_FAILED':
+            logger.info(message['details'])
+
+        elif mtype == 'OK':  # Server replied OK. We can advance the state
             if self.state == STATE_OPEN:
                 logger.info("Channel open")
                 
@@ -240,10 +252,31 @@ class ClientProtocol(asyncio.Protocol):
         else:
             logger.warning("Invalid message type")
 
-        logger.debug('CLosing')
+        logger.debug('Closing')
         self.transport.close()
         self.loop.stop()
 
+    def process_challenge(self, message):
+        self.credentials['username'] = input("Username: ")
+        self.credentials['password'] = getpass.getpass("Password: ")
+
+        if 'public_key' in message:
+            self.server_public_key = base64.b64decode(message['public_key'].encode())
+            self.nonce = str(base64.b64decode(message['nonce'].encode()))
+            self.encrypted_password = self.crypto.rsa_encryption(self.credentials['password'] + self.nonce, self.server_public_key)
+            
+            message['type'] = 'CHALLENGE_RESPONSE'
+            message['credentials'] = {}
+            message['credentials']['username'] = self.credentials['username']
+            message['credentials']['encrypted_password'] = base64.b64encode(self.encrypted_password).decode()
+            self._send(message)
+
+            # IMPORTANTE PARA O SERVER print(self.crypto.rsa_decryption(self.encrypted_password, base64.b64decode(message['private_key'].encode())))
+        return 
+
+    def process_authentication(self, message):
+        print(message)
+    
     def process_negotiation_response(self, message: str) -> bool:
         """
         Called when a response of type NEGOTIATION is received.

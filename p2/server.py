@@ -49,6 +49,10 @@ class ClientHandler(asyncio.Protocol):
 		self.encrypted_data = ''
 		self.decrypted_data = []
 
+		self.password = "server_password"
+		self.rsa_public_key, self.rsa_private_key = self.crypto.key_pair_gen(self.password, 4096)
+		self.nonce = os.urandom(16)
+
 	def log_state(self, received):
 		states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']
 		logger.info("------------")
@@ -116,7 +120,8 @@ class ClientHandler(asyncio.Protocol):
 
 		mtype = message.get('type', "").upper()
 		error=None
-		self.log_state(mtype)
+		logger.info(mtype)
+		#self.log_state(mtype)
 		if mtype == 'OPEN':
 			if self.state == STATE_DH: # Check if state equal DH
 				ret = self.process_open(message)
@@ -126,9 +131,12 @@ class ClientHandler(asyncio.Protocol):
 				ret=True
 
 		if mtype == 'LOGIN_REQUEST':
-			self.process_login_request(message)
+			ret = self.process_login_request(message)
+		
+		elif mtype == 'CHALLENGE_RESPONSE':
+			ret = self.process_challenge_response(message)
 
-		if mtype == 'SECURE_X':
+		elif mtype == 'SECURE_X':
 			self.encrypted_data += message['payload']
 			ret = True
 
@@ -196,12 +204,30 @@ class ClientHandler(asyncio.Protocol):
 		"""
 		Here, the server must send a challenge to the client.
 		"""
-		print(message)
-		print(self.crypto.key_pair_gen("server_password", 4096, "private_key.key", "public_key.key"))
+		self._send({'type': 'CHALLENGE_REQUEST', 'public_key': self.rsa_public_key, 'nonce': base64.b64encode(self.nonce).decode()})
+		
+		return True
+	
+	def process_challenge_response(self, message):
+		username = message['credentials']['username']
+	
+		if not os.path.isfile('./server_db/' + username + '_pw.csv'):
+			self._send({'type': 'UNKNOWN_USER'})
+			return False
 
+		encrypted_password = message['credentials']['encrypted_password']
+		decrypted = self.crypto.rsa_decryption(self.password,base64.b64decode(encrypted_password.encode()),base64.b64decode(self.rsa_private_key.encode()))
 
-		return False
-
+		pw = ''
+		with open('./server_db/' + username + '_pw.csv', 'r') as f:
+			for line in f:
+				pw = line
+		
+		if pw + str(self.nonce) == decrypted:
+			self._send({'type': 'AUTH_SUCCESS'})
+		else:
+			self._send({'type': 'AUTH_FAILED', 'details': 'Incorrect password.'})
+		
 	def process_mac(self,message: str) -> bool:
 		"""
 		Processes a MAC message from the client.

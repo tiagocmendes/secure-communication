@@ -294,7 +294,7 @@ class Crypto:
             
             return
     
-    def key_pair_gen(self, password, length, private_file, public_file):
+    def key_pair_gen(self, password, length):
         valid_lengths = [1024, 2048, 3072, 4096]
 
         if length not in valid_lengths:
@@ -314,38 +314,26 @@ class Crypto:
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.BestAvailableEncryption(password)
         )
-
-        priv_key = pem
-        private_file = open(private_file, 'wb')
-        private_file.write(pem)
-        private_file.close()
+        priv_key = base64.b64encode(pem).decode()
 
         public_key = private_key.public_key()
         pem = public_key.public_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
-
-        pub_key = pem
-        public_file = open(public_file, 'wb')
-        public_file.write(pem)
-        public_file.close()
+        pub_key = base64.b64encode(pem).decode()
 
         return (pub_key, priv_key)
     
-    def rsa_encryption(self, file_name, key_file, encrypted_file):
+    def rsa_encryption(self, message, public_key):
     
-        f = open(file_name, 'r')
+        message = message.encode('utf-8')
 
-        message = b''
-        for line in f:
-            message += line.encode()
         
-        with open(key_file, "rb") as key_file:
-            public_key = serialization.load_pem_public_key(
-                key_file.read(),
-                backend=default_backend()
-            )
+        public_key = serialization.load_pem_public_key(
+            public_key,
+            backend=default_backend()
+        )
         
         ciphertext = public_key.encrypt(
             message,
@@ -356,21 +344,16 @@ class Crypto:
             )
         )
 
-        with open(encrypted_file, 'wb') as encrypted_file:
-            encrypted_file.write(ciphertext)
+        return ciphertext
 
-    def rsa_decryption(self, pw, file_name, key_file, decrypted_file):
-    
-        with open(key_file, "rb") as key_file:
-            private_key = serialization.load_pem_private_key(
-                key_file.read(),
-                password=pw.encode(),
-                backend=default_backend()
-            )
+    def rsa_decryption(self, password, ciphertext, private_key):
         
-        with open(file_name, 'rb') as file_name:
-            ciphertext = file_name.read()
-
+        private_key = serialization.load_pem_private_key(
+            private_key,
+            password=password.encode(),
+            backend=default_backend()
+        )
+        
         plaintext = private_key.decrypt(
             ciphertext,
             padding.OAEP(
@@ -380,5 +363,4 @@ class Crypto:
             )
         )
 
-        with open(decrypted_file, 'w') as encrypted_file:
-            encrypted_file.write(plaintext.decode())
+        return plaintext.decode()
