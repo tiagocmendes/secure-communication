@@ -51,8 +51,26 @@ class ClientHandler(asyncio.Protocol):
 
 		self.password = "tq`>_!+^}u,2rr6(-x-@"
 		self.rsa_public_key, self.rsa_private_key = self.crypto.key_pair_gen(self.password, 4096)
-		self.nonce = os.urandom(16)
 		self.client_nonce = None
+
+		self.registered_users = self.load_users()
+		self.authentication_tries = 0
+		self.authenticated_user = None
+
+
+	def load_users(self):
+		with open('./server_db/users.csv', 'r') as f:
+			f.readline() # ignore header
+			users = {user.replace("\n", "").split("\t")[0]:user.replace("\n", "").split("\t")[1:] for user in f}
+			f.close()
+			return users
+	
+	def update_users(self):
+		with open('./server_db/users.csv', 'w') as f:
+			f.write("Username\tPassword\tPermissions\n")
+			for user in self.registered_users:
+				f.write(f"{user}\t{self.registered_users[user][0]}\t{self.registered_users[user][1]}\n")
+			f.close()
 
 	def log_state(self, received):
 		states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']
@@ -133,11 +151,14 @@ class ClientHandler(asyncio.Protocol):
 				self.state = STATE_OPEN
 				ret=True
 
-		if mtype == 'LOGIN_REQUEST':
+		elif mtype == 'LOGIN_REQUEST':
 			ret = self.process_login_request(message)
 		
 		elif mtype == 'CHALLENGE_RESPONSE':
 			ret = self.process_challenge_response(message)
+		
+		elif mtype == 'FILE_REQUEST':
+			ret = self.process_file_request(message)
 
 		elif mtype == 'SECURE_X':
 			self.encrypted_data += message['payload']
@@ -208,29 +229,48 @@ class ClientHandler(asyncio.Protocol):
 		Here, the server must send a challenge to the client.
 		"""
 		self.client_nonce = base64.b64decode(message['nonce'].encode())
+		self.nonce = os.urandom(16)
 		self._send({'type': 'CHALLENGE_REQUEST', 'public_key': self.rsa_public_key, 'nonce': base64.b64encode(self.nonce).decode()})
 		
 		return True
 	
 	def process_challenge_response(self, message):
 		username = message['credentials']['username']
-	
-		if not os.path.isfile('./server_db/' + username + '_pw.csv'):
-			self._send({'type': 'AUTH_FAILED'})
+		
+		if username not in self.registered_users or 'A1' not in self.registered_users[username][1]:
+			self._send({'type': 'AUTH_RESPONSE', 'status': 'DENIED'})
 			return False
 
 		encrypted_password = message['credentials']['encrypted_password']
 		decrypted = self.crypto.rsa_decryption(self.password,base64.b64decode(encrypted_password.encode()),base64.b64decode(self.rsa_private_key.encode()))
 
-		pw = ''
-		with open('./server_db/' + username + '_pw.csv', 'r') as f:
-			for line in f:
-				pw = line
-		
+		pw, permissions = self.registered_users[username][0], self.registered_users[username][1]	
 		if str(self.client_nonce) + pw + str(self.nonce) == decrypted:
-			self._send({'type': 'AUTH_SUCCESS'})
+			self._send({'type': 'AUTH_RESPONSE', 'status': 'SUCCESS', 'username': username})
+			self.authenticated_user = [username, permissions]
 		else:
-			self._send({'type': 'AUTH_FAILED'})
+			self.authentication_tries += 1
+			if self.authentication_tries == 3:
+				# remove authentication permission
+				self.registered_users[username][1] = self.registered_users[username][1].replace('1', '0')
+				self.update_users()
+				self._send({'type': 'AUTH_RESPONSE', 'status': 'DENIED'})
+				return False
+			
+			self._send({'type': 'AUTH_RESPONSE', 'status': 'FAILED'})
+			return True
+		
+		return True
+	
+	def process_file_request(self, message):
+
+		if 'T1' in self.authenticated_user[1]:
+			self._send({'type': 'FILE_REQUEST_RESPONSE', 'status': 'PERMISSION_GRANTED'})
+		else:
+			self._send({'type': 'FILE_REQUEST_RESPONSE', 'status': 'PERMISSION_DENIED'})
+			return False
+
+		return True
 		
 	def process_mac(self,message: str) -> bool:
 		"""
