@@ -183,6 +183,10 @@ class ClientProtocol(asyncio.Protocol):
                 self.process_authentication(message)
             else:
                 logger.info('User authentication failed.')
+                self.nonce = os.urandom(16)
+                message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.nonce).decode()}
+                self._send(message)
+                self.state = STATE_LOGIN_REQ 
             return
         
         elif mtype == 'FILE_REQUEST_RESPONSE':

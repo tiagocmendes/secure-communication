@@ -51,10 +51,10 @@ class ClientHandler(asyncio.Protocol):
 
 		self.password = "tq`>_!+^}u,2rr6(-x-@"
 		self.rsa_public_key, self.rsa_private_key = self.crypto.key_pair_gen(self.password, 4096)
-		self.nonce = os.urandom(16)
 		self.client_nonce = None
 
 		self.registered_users = self.load_users()
+		self.authentication_tries = 0
 		self.authenticated_user = None
 
 
@@ -220,14 +220,15 @@ class ClientHandler(asyncio.Protocol):
 		Here, the server must send a challenge to the client.
 		"""
 		self.client_nonce = base64.b64decode(message['nonce'].encode())
+		self.nonce = os.urandom(16)
 		self._send({'type': 'CHALLENGE_REQUEST', 'public_key': self.rsa_public_key, 'nonce': base64.b64encode(self.nonce).decode()})
 		
 		return True
 	
 	def process_challenge_response(self, message):
 		username = message['credentials']['username']
-
-		if username not in self.registered_users:
+		
+		if username not in self.registered_users or 'A1' not in self.registered_users[username][1]:
 			self._send({'type': 'AUTH_FAILED'})
 			return False
 
@@ -239,8 +240,14 @@ class ClientHandler(asyncio.Protocol):
 			self._send({'type': 'AUTH_RESPONSE', 'status': 'SUCCESS', 'username': username})
 			self.authenticated_user = [username, permissions]
 		else:
+			self.authentication_tries += 1
+			print(self.authentication_tries)
+			if self.authentication_tries == 3:
+				# remove authentication permission
+				self.registered_users[username][1].replace('1', '0')
+			
 			self._send({'type': 'AUTH_RESPONSE', 'status': 'FAILED'})
-			return False
+			return True
 		
 		return True
 	
