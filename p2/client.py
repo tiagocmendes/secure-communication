@@ -22,6 +22,8 @@ STATE_DH=6
 STATE_VALIDATE_SERVER=7
 
 
+STATE_LOGIN_REQ = 8
+
 class ClientProtocol(asyncio.Protocol):
     """
     Client that handles a single client
@@ -50,11 +52,16 @@ class ClientProtocol(asyncio.Protocol):
         self.crypto = Crypto(self.choosen_cipher, self.choosen_mode, self.choosen_digest)
 
         self.encrypted_data = ''
+
+        self.credentials = {}
+        self.server_public_key = None
+        self.nonce = os.urandom(16)
+        self.server_nonce = None
     
     def log_state(self, received):
         states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']
         logger.info("------------")
-        logger.info("State: {}".format(states[self.state]))
+        #logger.info("State: {}".format(states[self.state]))
         logger.info("Received: {}".format(received))
 
     def encrypt_payload(self, message: dict) -> None:
@@ -110,14 +117,17 @@ class ClientProtocol(asyncio.Protocol):
         logger.debug('Connected to Server')
         logger.debug('Sending cipher algorithms')
 
-        message = {'type':'NEGOTIATION','algorithms':{'symetric_ciphers':self.symetric_ciphers,'chiper_modes':self.cipher_modes,'digest':self.digest}}
-
+        logger.info('Connection to Server')
+        logger.info('LOGIN_REQUEST')
+        
+        #message = {'type':'NEGOTIATION','algorithms':{'symetric_ciphers':self.symetric_ciphers,'chiper_modes':self.cipher_modes,'digest':self.digest}}
+               
+        message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.nonce).decode()}
        
         self._send(message)
 
-        self.state = STATE_NEGOTIATION 
+        self.state = STATE_LOGIN_REQ 
 
-    
 
     def data_received(self, data: str) -> None:
         """
@@ -163,7 +173,18 @@ class ClientProtocol(asyncio.Protocol):
 
         mtype = message.get('type', None)
         self.log_state(mtype)
-        if mtype == 'OK':  # Server replied OK. We can advance the state
+
+        if mtype == 'CHALLENGE_REQUEST':
+            self.process_challenge(message)
+            return 
+        
+        elif mtype == 'AUTH_SUCCESS':
+            logger.info('User authenticated with success.')
+        
+        elif mtype == 'AUTH_FAILED':
+            logger.info('User authentication failed.')
+
+        elif mtype == 'OK':  # Server replied OK. We can advance the state
             if self.state == STATE_OPEN:
                 logger.info("Channel open")
                 
@@ -230,9 +251,27 @@ class ClientProtocol(asyncio.Protocol):
         else:
             logger.warning("Invalid message type")
 
-        logger.debug('CLosing')
+        logger.debug('Closing')
         self.transport.close()
         self.loop.stop()
+
+    def process_challenge(self, message):
+        self.credentials['username'] = input("Username: ")
+        self.credentials['password'] = getpass.getpass("Password: ")
+
+        if 'public_key' in message:
+            self.server_public_key = base64.b64decode(message['public_key'].encode())
+            self.server_nonce = str(base64.b64decode(message['nonce'].encode()))
+            self.encrypted_password = self.crypto.rsa_encryption(str(self.nonce) + self.credentials['password'] + self.server_nonce, self.server_public_key)
+            
+            message['type'] = 'CHALLENGE_RESPONSE'
+            message['credentials'] = {}
+            message['credentials']['username'] = self.credentials['username']
+            message['credentials']['encrypted_password'] = base64.b64encode(self.encrypted_password).decode()
+            self._send(message)
+
+            # IMPORTANTE PARA O SERVER print(self.crypto.rsa_decryption(self.encrypted_password, base64.b64decode(message['private_key'].encode())))
+        return 
 
     def process_negotiation_response(self, message: str) -> bool:
         """

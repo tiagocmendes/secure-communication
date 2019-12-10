@@ -14,6 +14,11 @@ from cryptography.hazmat.primitives.asymmetric import dh
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography import x509
 from datetime import datetime
+import getpass
+import base64
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import utils, rsa, padding
+from cryptography.hazmat.primitives import serialization, hashes
 
 
 """
@@ -288,3 +293,74 @@ class Crypto:
                 return self.build_issuers(chain, self.roots[issuer])
             
             return
+    
+    def key_pair_gen(self, password, length):
+        valid_lengths = [1024, 2048, 3072, 4096]
+
+        if length not in valid_lengths:
+            print("ERROR - Not a valid length!")
+            return 
+        
+        password = password.encode()
+
+        private_key = rsa.generate_private_key(
+            public_exponent=65537, 
+            key_size=length,
+            backend=default_backend()
+        )
+
+        pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.BestAvailableEncryption(password)
+        )
+        priv_key = base64.b64encode(pem).decode()
+
+        public_key = private_key.public_key()
+        pem = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+        pub_key = base64.b64encode(pem).decode()
+
+        return (pub_key, priv_key)
+    
+    def rsa_encryption(self, message, public_key):
+    
+        message = message.encode('utf-8')
+
+        
+        public_key = serialization.load_pem_public_key(
+            public_key,
+            backend=default_backend()
+        )
+        
+        ciphertext = public_key.encrypt(
+            message,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+
+        return ciphertext
+
+    def rsa_decryption(self, password, ciphertext, private_key):
+        
+        private_key = serialization.load_pem_private_key(
+            private_key,
+            password=password.encode(),
+            backend=default_backend()
+        )
+        
+        plaintext = private_key.decrypt(
+            ciphertext,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+
+        return plaintext.decode()
