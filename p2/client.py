@@ -22,8 +22,8 @@ STATE_DH=6
 STATE_VALIDATE_SERVER=7
 
 
-STATE_LOGIN_REQ = 8
-STATE_SERVER_AUTH = 8
+STATE_CLIENT_AUTH = 8
+STATE_SERVER_AUTH = 9
 
 
 class ClientProtocol(asyncio.Protocol):
@@ -196,6 +196,17 @@ class ClientProtocol(asyncio.Protocol):
                 self._send(secure_message)
                 self.send_mac()
             if flag:
+
+                #Generate a new NONCE
+                self.crypto.auth_nonce=os.urandom(16)
+
+                self.state=STATE_CLIENT_AUTH
+                
+                message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.crypto.auth_nonce).decode()}
+                secure_message = self.encrypt_payload(message)
+                self._send(secure_message)
+                self.send_mac()
+            
                 return 
         
         elif mtype == 'AUTH_RESPONSE':
@@ -342,23 +353,24 @@ class ClientProtocol(asyncio.Protocol):
     def process_authentication(self, message):
         logger.info('User authenticated with success! Username: ' + message['username'])
 
-        self._send({'type': 'FILE_REQUEST'})
+        secure_message = self.encrypt_payload({'type': 'OPEN', 'file_name': self.file_name})
+        self._send(secure_message)
+        self.send_mac()
+        self.state = STATE_OPEN
          
     
     def process_challenge(self, message):
         self.credentials['username'] = input("Username: ")
         self.credentials['password'] = getpass.getpass("Password: ")
 
-        if 'public_key' in message:
-            self.server_public_key = base64.b64decode(message['public_key'].encode())
-            self.server_nonce = str(base64.b64decode(message['nonce'].encode()))
-            self.encrypted_password = self.crypto.rsa_encryption(str(self.nonce) + self.credentials['password'] + self.server_nonce, self.server_public_key)
-            
-            message['type'] = 'CHALLENGE_RESPONSE'
-            message['credentials'] = {}
-            message['credentials']['username'] = self.credentials['username']
-            message['credentials']['encrypted_password'] = base64.b64encode(self.encrypted_password).decode()
-            self._send(message)
+        self.server_nonce = str(base64.b64decode(message['nonce'].encode()))
+        self.encrypted_password = self.crypto.rsa_encryption(str(self.crypto.auth_nonce) + self.credentials['password'] + self.server_nonce, self.crypto.server_public_key)
+        
+        message['type'] = 'CHALLENGE_RESPONSE'
+        message['credentials'] = {}
+        message['credentials']['username'] = self.credentials['username']
+        message['credentials']['encrypted_password'] = base64.b64encode(self.encrypted_password).decode()
+        self._send(message)
 
             # IMPORTANTE PARA O SERVER print(self.crypto.rsa_decryption(self.encrypted_password, base64.b64decode(message['private_key'].encode())))
         return 

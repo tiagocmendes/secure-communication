@@ -340,7 +340,7 @@ class Crypto:
             #Validate cert signature
             flag=self.validate_cert_signature(self.chain[i],self.chain[i+1])
             if not flag:
-                return Flag
+                return flag
 
             #Validate common name with issuer
             #flag=self.validate_cert_common_name(self.chain[i],self.chain[i+1])
@@ -388,12 +388,7 @@ class Crypto:
     
         message = message.encode('utf-8')
 
-        
-        public_key = serialization.load_pem_public_key(
-            public_key,
-            backend=default_backend()
-        )
-        
+       
         ciphertext = public_key.encrypt(
             message,
             padding.OAEP(
@@ -479,11 +474,7 @@ class Crypto:
 
     def rsa_decryption(self, password, ciphertext, private_key):
         
-        private_key = serialization.load_pem_private_key(
-            private_key,
-            password=password.encode(),
-            backend=default_backend()
-        )
+       
         
         plaintext = private_key.decrypt(
             ciphertext,

@@ -20,6 +20,7 @@ STATE_NEGOTIATION=5
 STATE_DH = 6
 
 STATE_SERVER_AUTH=7
+STATE_CLIENT_AUTH=8
 
 #GLOBAL
 storage_dir = 'files'
@@ -146,6 +147,7 @@ class ClientHandler(asyncio.Protocol):
 		logger.info(mtype)
 		#self.log_state(mtype)
 		if mtype == 'OPEN':
+			print(self.state)
 			if self.state == STATE_DH: # Check if state equal DH
 				ret = self.process_open(message)
 			else:
@@ -235,9 +237,10 @@ class ClientHandler(asyncio.Protocol):
 		"""
 		Here, the server must send a challenge to the client.
 		"""
+		self.state=STATE_CLIENT_AUTH
 		self.client_nonce = base64.b64decode(message['nonce'].encode())
-		self.nonce = os.urandom(16)
-		self._send({'type': 'CHALLENGE_REQUEST', 'public_key': self.rsa_public_key, 'nonce': base64.b64encode(self.nonce).decode()})
+		self.crypto.auth_nonce = os.urandom(16)
+		self._send({'type': 'CHALLENGE_REQUEST', 'nonce': base64.b64encode(self.crypto.auth_nonce).decode()})
 		
 		return True
 
@@ -266,10 +269,10 @@ class ClientHandler(asyncio.Protocol):
 			return False
 
 		encrypted_password = message['credentials']['encrypted_password']
-		decrypted = self.crypto.rsa_decryption(self.password,base64.b64decode(encrypted_password.encode()),base64.b64decode(self.rsa_private_key.encode()))
+		decrypted = self.crypto.rsa_decryption(self.password,base64.b64decode(encrypted_password.encode()),self.crypto.rsa_private_key)
 
 		pw, permissions = self.registered_users[username][0], self.registered_users[username][1]	
-		if str(self.client_nonce) + pw + str(self.nonce) == decrypted:
+		if str(self.client_nonce) + pw + str(self.crypto.auth_nonce) == decrypted:
 			self._send({'type': 'AUTH_RESPONSE', 'status': 'SUCCESS', 'username': username})
 			self.authenticated_user = [username, permissions]
 		else:
@@ -402,7 +405,7 @@ class ClientHandler(asyncio.Protocol):
 		"""
 		logger.debug("Process Open: {}".format(message))
 
-		if self.state != STATE_DH:
+		if self.state != STATE_CLIENT_AUTH:
 			logger.warning("Invalid state. Discarding")
 			return False
 
@@ -515,7 +518,8 @@ class ClientHandler(asyncio.Protocol):
 		mtype = message['type'] 
 		
 		if mtype == 'OPEN':
-			if self.state==STATE_DH:
+			print(self.state)
+			if self.state==STATE_CLIENT_AUTH:
 				ret = self.process_open(message)
 			else:
 				self._send({'type': 'OK'})
@@ -527,6 +531,8 @@ class ClientHandler(asyncio.Protocol):
 			for msg in self.decrypted_data:
 				message['data'] += json.loads(msg)['data']
 			ret = self.process_data(message)
+		elif mtype == 'LOGIN_REQUEST':
+			ret = self.process_login_request(message)
 		elif mtype == 'SERVER_AUTH_REQUEST':
 			ret = self.process_server_auth(message)
 		elif mtype == 'SERVER_AUTH_FAILED':
