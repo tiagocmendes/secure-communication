@@ -55,6 +55,8 @@ class ClientProtocol(asyncio.Protocol):
 
         self.credentials = {}
         self.server_public_key = None
+        self.nonce = os.urandom(16)
+        self.server_nonce = None
     
     def log_state(self, received):
         states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']
@@ -120,7 +122,7 @@ class ClientProtocol(asyncio.Protocol):
         
         #message = {'type':'NEGOTIATION','algorithms':{'symetric_ciphers':self.symetric_ciphers,'chiper_modes':self.cipher_modes,'digest':self.digest}}
                
-        message = {'type': 'LOGIN_REQUEST'}
+        message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.nonce).decode()}
        
         self._send(message)
 
@@ -175,15 +177,12 @@ class ClientProtocol(asyncio.Protocol):
         if mtype == 'CHALLENGE_REQUEST':
             self.process_challenge(message)
             return 
-
-        elif mtype == 'UNKNOWN_USER':
-            logger.info('Server did not recognized username.')
         
         elif mtype == 'AUTH_SUCCESS':
             logger.info('User authenticated with success.')
         
         elif mtype == 'AUTH_FAILED':
-            logger.info(message['details'])
+            logger.info('User authentication failed.')
 
         elif mtype == 'OK':  # Server replied OK. We can advance the state
             if self.state == STATE_OPEN:
@@ -262,8 +261,8 @@ class ClientProtocol(asyncio.Protocol):
 
         if 'public_key' in message:
             self.server_public_key = base64.b64decode(message['public_key'].encode())
-            self.nonce = str(base64.b64decode(message['nonce'].encode()))
-            self.encrypted_password = self.crypto.rsa_encryption(self.credentials['password'] + self.nonce, self.server_public_key)
+            self.server_nonce = str(base64.b64decode(message['nonce'].encode()))
+            self.encrypted_password = self.crypto.rsa_encryption(str(self.nonce) + self.credentials['password'] + self.server_nonce, self.server_public_key)
             
             message['type'] = 'CHALLENGE_RESPONSE'
             message['credentials'] = {}
@@ -274,9 +273,6 @@ class ClientProtocol(asyncio.Protocol):
             # IMPORTANTE PARA O SERVER print(self.crypto.rsa_decryption(self.encrypted_password, base64.b64decode(message['private_key'].encode())))
         return 
 
-    def process_authentication(self, message):
-        print(message)
-    
     def process_negotiation_response(self, message: str) -> bool:
         """
         Called when a response of type NEGOTIATION is received.

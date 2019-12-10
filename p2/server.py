@@ -49,9 +49,10 @@ class ClientHandler(asyncio.Protocol):
 		self.encrypted_data = ''
 		self.decrypted_data = []
 
-		self.password = "server_password"
+		self.password = "tq`>_!+^}u,2rr6(-x-@"
 		self.rsa_public_key, self.rsa_private_key = self.crypto.key_pair_gen(self.password, 4096)
 		self.nonce = os.urandom(16)
+		self.client_nonce = None
 
 	def log_state(self, received):
 		states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']
@@ -66,10 +67,12 @@ class ClientHandler(asyncio.Protocol):
 		:param transport: The transport stream to use with this client
 		:return:
 		"""
+	
 		self.peername = transport.get_extra_info('peername')
 		logger.info('\n\nConnection from {}'.format(self.peername))
 		self.transport = transport
 		self.state = STATE_CONNECT
+		
 
 
 	def data_received(self, data: bytes) -> None:
@@ -204,6 +207,7 @@ class ClientHandler(asyncio.Protocol):
 		"""
 		Here, the server must send a challenge to the client.
 		"""
+		self.client_nonce = base64.b64decode(message['nonce'].encode())
 		self._send({'type': 'CHALLENGE_REQUEST', 'public_key': self.rsa_public_key, 'nonce': base64.b64encode(self.nonce).decode()})
 		
 		return True
@@ -212,7 +216,7 @@ class ClientHandler(asyncio.Protocol):
 		username = message['credentials']['username']
 	
 		if not os.path.isfile('./server_db/' + username + '_pw.csv'):
-			self._send({'type': 'UNKNOWN_USER'})
+			self._send({'type': 'AUTH_FAILED'})
 			return False
 
 		encrypted_password = message['credentials']['encrypted_password']
@@ -223,10 +227,10 @@ class ClientHandler(asyncio.Protocol):
 			for line in f:
 				pw = line
 		
-		if pw + str(self.nonce) == decrypted:
+		if str(self.client_nonce) + pw + str(self.nonce) == decrypted:
 			self._send({'type': 'AUTH_SUCCESS'})
 		else:
-			self._send({'type': 'AUTH_FAILED', 'details': 'Incorrect password.'})
+			self._send({'type': 'AUTH_FAILED'})
 		
 	def process_mac(self,message: str) -> bool:
 		"""
