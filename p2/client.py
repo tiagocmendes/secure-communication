@@ -181,6 +181,8 @@ class ClientProtocol(asyncio.Protocol):
         elif mtype == 'AUTH_RESPONSE':
             if message['status'] == 'SUCCESS':
                 self.process_authentication(message)
+            elif message['status'] == 'DENIED':
+                logger.info('User authentication denied.')
             else:
                 logger.info('User authentication failed.')
                 self.nonce = os.urandom(16)

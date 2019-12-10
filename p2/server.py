@@ -59,10 +59,19 @@ class ClientHandler(asyncio.Protocol):
 
 
 	def load_users(self):
-		with open('./server_db/users.csv') as f:
+		with open('./server_db/users.csv', 'r') as f:
 			f.readline() # ignore header
-			return {user.replace("\n", "").split("\t")[0]:user.replace("\n", "").split("\t")[1:] for user in f}
-			
+			users = {user.replace("\n", "").split("\t")[0]:user.replace("\n", "").split("\t")[1:] for user in f}
+			f.close()
+			return users
+	
+	def update_users(self):
+		with open('./server_db/users.csv', 'w') as f:
+			f.write("Username\tPassword\tPermissions\n")
+			for user in self.registered_users:
+				f.write(f"{user}\t{self.registered_users[user][0]}\t{self.registered_users[user][1]}\n")
+			f.close()
+
 	def log_state(self, received):
 		states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']
 		logger.info("------------")
@@ -229,7 +238,7 @@ class ClientHandler(asyncio.Protocol):
 		username = message['credentials']['username']
 		
 		if username not in self.registered_users or 'A1' not in self.registered_users[username][1]:
-			self._send({'type': 'AUTH_FAILED'})
+			self._send({'type': 'AUTH_RESPONSE', 'status': 'DENIED'})
 			return False
 
 		encrypted_password = message['credentials']['encrypted_password']
@@ -241,10 +250,12 @@ class ClientHandler(asyncio.Protocol):
 			self.authenticated_user = [username, permissions]
 		else:
 			self.authentication_tries += 1
-			print(self.authentication_tries)
 			if self.authentication_tries == 3:
 				# remove authentication permission
-				self.registered_users[username][1].replace('1', '0')
+				self.registered_users[username][1] = self.registered_users[username][1].replace('1', '0')
+				self.update_users()
+				self._send({'type': 'AUTH_RESPONSE', 'status': 'DENIED'})
+				return False
 			
 			self._send({'type': 'AUTH_RESPONSE', 'status': 'FAILED'})
 			return True
