@@ -26,9 +26,11 @@ for obj in session.findObjects():
     attr = dict(zip(map(PyKCS11.CKA.get, all_attr), attr))
     # print(attr)
     print('Label: ' + attr['CKA_LABEL'])
-    if attr['CKA_LABEL'] in ['CITIZEN AUTHENTICATION CERTIFICATE']:
+    if attr['CKA_LABEL'] in ['CITIZEN AUTHENTICATION CERTIFICATE', 'AUTHENTICATION SUB CA', 'ROOT CA']:
         cert = x509.load_der_x509_certificate(
             bytes(attr['CKA_VALUE']), default_backend())
+
+        print(cert)
         #print(f"fingerprint: {cert.fingerprint}")
         #print(f"issuer: {cert.issuer}")
         #print(f"not_valid_after: {cert.not_valid_after}")
