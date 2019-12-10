@@ -26,16 +26,16 @@ for obj in session.findObjects():
     attr = dict(zip(map(PyKCS11.CKA.get, all_attr), attr))
     # print(attr)
     print('Label: ' + attr['CKA_LABEL'])
-    if attr['CKA_LABEL'] in ['CITIZEN SIGNATURE CERTIFICATE', 'CITIZEN AUTHENTICATION CERTIFICATE', 'SIGNATURE SUB CA', 'AUTHENTICATION SUB CA', 'ROOT CA']:
+    if attr['CKA_LABEL'] in ['CITIZEN AUTHENTICATION CERTIFICATE']:
         cert = x509.load_der_x509_certificate(
             bytes(attr['CKA_VALUE']), default_backend())
-        print(f"fingerprint: {cert.fingerprint}")
-        print(f"issuer: {cert.issuer}")
-        print(f"not_valid_after: {cert.not_valid_after}")
-        print(f"not_valid_before: {cert.not_valid_before}")
-        print(f"public_key: {cert.public_key}")
-        print(f"subject: {cert.subject}")
-        print(f"version: {cert.version}")
+        #print(f"fingerprint: {cert.fingerprint}")
+        #print(f"issuer: {cert.issuer}")
+        #print(f"not_valid_after: {cert.not_valid_after}")
+        #print(f"not_valid_before: {cert.not_valid_before}")
+        #print(f"public_key: {cert.public_key}")
+        #print(f"subject: {cert.subject}")
+        #print(f"version: {cert.version}")
 
 private_key = session.findObjects(
     [(PyKCS11.CKA_CLASS, PyKCS11.CKO_PRIVATE_KEY), 
@@ -45,3 +45,4 @@ mechanism = PyKCS11.Mechanism(PyKCS11.CKM_SHA1_RSA_PKCS, None)
 
 text = b'text to sign'
 signature = bytes(session.sign(private_key, text, mechanism))
+print(str(signature))
