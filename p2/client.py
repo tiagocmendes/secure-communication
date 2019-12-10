@@ -178,11 +178,22 @@ class ClientProtocol(asyncio.Protocol):
             self.process_challenge(message)
             return 
         
-        elif mtype == 'AUTH_SUCCESS':
-            logger.info('User authenticated with success.')
+        elif mtype == 'AUTH_RESPONSE':
+            if message['status'] == 'SUCCESS':
+                self.process_authentication(message)
+            else:
+                logger.info('User authentication failed.')
+            return
         
-        elif mtype == 'AUTH_FAILED':
-            logger.info('User authentication failed.')
+        elif mtype == 'FILE_REQUEST_RESPONSE':
+            if message['status'] == 'PERMISSION_GRANTED':
+                logger.info('Permission granted to transfer the file.')
+                message = {'type':'NEGOTIATION','algorithms':{'symetric_ciphers':self.symetric_ciphers,'chiper_modes':self.cipher_modes,'digest':self.digest}}
+                self._send(message)
+                self.state = STATE_NEGOTIATION
+            else:
+                logger.info('Permission denied to transfer the file.')
+            return
 
         elif mtype == 'OK':  # Server replied OK. We can advance the state
             if self.state == STATE_OPEN:
@@ -254,6 +265,11 @@ class ClientProtocol(asyncio.Protocol):
         logger.debug('Closing')
         self.transport.close()
         self.loop.stop()
+
+    def process_authentication(self, message):
+        logger.info('User authenticated with success! Username: ' + message['username'])
+
+        self._send({'type': 'FILE_REQUEST'})
 
     def process_challenge(self, message):
         self.credentials['username'] = input("Username: ")

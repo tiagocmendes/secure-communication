@@ -54,6 +54,15 @@ class ClientHandler(asyncio.Protocol):
 		self.nonce = os.urandom(16)
 		self.client_nonce = None
 
+		self.registered_users = self.load_users()
+		self.authenticated_user = None
+
+
+	def load_users(self):
+		with open('./server_db/users.csv') as f:
+			f.readline() # ignore header
+			return {user.replace("\n", "").split("\t")[0]:user.replace("\n", "").split("\t")[1:] for user in f}
+			
 	def log_state(self, received):
 		states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']
 		logger.info("------------")
@@ -133,11 +142,14 @@ class ClientHandler(asyncio.Protocol):
 				self.state = STATE_OPEN
 				ret=True
 
-		if mtype == 'LOGIN_REQUEST':
+		elif mtype == 'LOGIN_REQUEST':
 			ret = self.process_login_request(message)
 		
 		elif mtype == 'CHALLENGE_RESPONSE':
 			ret = self.process_challenge_response(message)
+		
+		elif mtype == 'FILE_REQUEST':
+			ret = self.process_file_request(message)
 
 		elif mtype == 'SECURE_X':
 			self.encrypted_data += message['payload']
@@ -214,23 +226,33 @@ class ClientHandler(asyncio.Protocol):
 	
 	def process_challenge_response(self, message):
 		username = message['credentials']['username']
-	
-		if not os.path.isfile('./server_db/' + username + '_pw.csv'):
+
+		if username not in self.registered_users:
 			self._send({'type': 'AUTH_FAILED'})
 			return False
 
 		encrypted_password = message['credentials']['encrypted_password']
 		decrypted = self.crypto.rsa_decryption(self.password,base64.b64decode(encrypted_password.encode()),base64.b64decode(self.rsa_private_key.encode()))
 
-		pw = ''
-		with open('./server_db/' + username + '_pw.csv', 'r') as f:
-			for line in f:
-				pw = line
-		
+		pw, permissions = self.registered_users[username][0], self.registered_users[username][1]	
 		if str(self.client_nonce) + pw + str(self.nonce) == decrypted:
-			self._send({'type': 'AUTH_SUCCESS'})
+			self._send({'type': 'AUTH_RESPONSE', 'status': 'SUCCESS', 'username': username})
+			self.authenticated_user = [username, permissions]
 		else:
-			self._send({'type': 'AUTH_FAILED'})
+			self._send({'type': 'AUTH_RESPONSE', 'status': 'FAILED'})
+			return False
+		
+		return True
+	
+	def process_file_request(self, message):
+
+		if 'T1' in self.authenticated_user[1]:
+			self._send({'type': 'FILE_REQUEST_RESPONSE', 'status': 'PERMISSION_GRANTED'})
+		else:
+			self._send({'type': 'FILE_REQUEST_RESPONSE', 'status': 'PERMISSION_DENIED'})
+			return False
+
+		return True
 		
 	def process_mac(self,message: str) -> bool:
 		"""

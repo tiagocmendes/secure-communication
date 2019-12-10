@@ -16,7 +16,7 @@ def randomString(stringLength=10):
     return ''.join(random.choice(letters) for i in range(stringLength))
 
 
-permissions = ['AUTHENTICATION', 'AUTHENTICATION-TRANSFER']
+permissions = ['A1-T0', 'A1-T1']
 
 def main():
     with open('users.csv', 'w') as f:
