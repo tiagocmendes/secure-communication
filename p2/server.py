@@ -19,6 +19,8 @@ STATE_KEY_ROTATION=4
 STATE_NEGOTIATION=5
 STATE_DH = 6
 
+STATE_SERVER_AUTH=7
+
 #GLOBAL
 storage_dir = 'files'
 
@@ -133,8 +135,13 @@ class ClientHandler(asyncio.Protocol):
 				self.state = STATE_OPEN
 				ret=True
 
-		if mtype == 'LOGIN_REQUEST':
+		elif mtype == 'LOGIN_REQUEST':
 			ret = self.process_login_request(message)
+
+		elif mtype == 'SERVER_AUTH_REQUEST':
+			ret = self.process_server_auth(message)
+			self.state=STATE_SERVER_AUTH
+
 		
 		elif mtype == 'CHALLENGE_RESPONSE':
 			ret = self.process_challenge_response(message)
@@ -210,6 +217,23 @@ class ClientHandler(asyncio.Protocol):
 		self.client_nonce = base64.b64decode(message['nonce'].encode())
 		self._send({'type': 'CHALLENGE_REQUEST', 'public_key': self.rsa_public_key, 'nonce': base64.b64encode(self.nonce).decode()})
 		
+		return True
+
+	def process_server_auth(self, message):
+		"""
+		Here, the server must send a challenge to the client.
+		"""
+		self.crypto.server_cert=self.crypto.load_cert("server_cert/secure_server.pem")
+		self.crypto.rsa_public_key=self.crypto.server_cert.public_key()
+		self.crypto.rsa_private_key=self.crypto.load_key_from_file("server_cert/server_key.pem")
+		nonce=bytes(message['nonce'],'ISO-8859-1')
+
+		#Encrypt NONCE received by client
+		self.crypto.signature = self.crypto.rsa_signing(nonce, self.crypto.rsa_private_key)
+
+		message={'type':'SERVER_AUTH_RESPONSE','signature':str(self.crypto.signature,'ISO-8859-1'),'server_cert':"server_cert/secure_server.pem",'server_roots':"server_roots"}
+
+		self._send(message)
 		return True
 	
 	def process_challenge_response(self, message):
@@ -463,6 +487,11 @@ class ClientHandler(asyncio.Protocol):
 			for msg in self.decrypted_data:
 				message['data'] += json.loads(msg)['data']
 			ret = self.process_data(message)
+		elif mtype == 'SERVER_AUTH_REQUEST':
+			ret = self.process_server_auth(message)
+		elif mtype == 'SERVER_AUTH_FAILED':
+			logger.warning("Server AUTH failed.")
+			ret=False
 		elif mtype == 'CLOSE':
 			ret = self.process_close(message)
 

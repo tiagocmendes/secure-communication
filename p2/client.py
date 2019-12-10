@@ -23,6 +23,8 @@ STATE_VALIDATE_SERVER=7
 
 
 STATE_LOGIN_REQ = 8
+STATE_SERVER_AUTH = 8
+
 
 class ClientProtocol(asyncio.Protocol):
     """
@@ -48,6 +50,7 @@ class ClientProtocol(asyncio.Protocol):
         self.choosen_cipher = None
         self.choosen_mode = None
         self.choosen_digest = None
+        self.host_name="127.0.0.1"
 
         self.crypto = Crypto(self.choosen_cipher, self.choosen_mode, self.choosen_digest)
 
@@ -57,6 +60,7 @@ class ClientProtocol(asyncio.Protocol):
         self.server_public_key = None
         self.nonce = os.urandom(16)
         self.server_nonce = None
+        self.validation_type="Challenge" #Challenge or Citzent card
     
     def log_state(self, received):
         states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']
@@ -120,13 +124,20 @@ class ClientProtocol(asyncio.Protocol):
         logger.info('Connection to Server')
         logger.info('LOGIN_REQUEST')
         
-        #message = {'type':'NEGOTIATION','algorithms':{'symetric_ciphers':self.symetric_ciphers,'chiper_modes':self.cipher_modes,'digest':self.digest}}
+        message = {'type':'NEGOTIATION','algorithms':{'symetric_ciphers':self.symetric_ciphers,'chiper_modes':self.cipher_modes,'digest':self.digest}}
                
-        message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.nonce).decode()}
+        #message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.nonce).decode()}
+
+        #Generate a new NONCE
+        self.crypto.auth_nonce=os.urandom(16)
+        print(f"Nonce: {self.crypto.auth_nonce}")
+        #message = {'type': 'SERVER_AUTH_REQUEST', 'nonce':  str(self.crypto.auth_nonce,'ISO-8859-1')}
+
        
         self._send(message)
-
-        self.state = STATE_LOGIN_REQ 
+        self.state=STATE_DH
+        #self.state = STATE_LOGIN_REQ 
+        #self.state = STATE_SERVER_AUTH
 
 
     def data_received(self, data: str) -> None:
@@ -177,6 +188,15 @@ class ClientProtocol(asyncio.Protocol):
         if mtype == 'CHALLENGE_REQUEST':
             self.process_challenge(message)
             return 
+        elif mtype == 'SERVER_AUTH_RESPONSE':
+            flag=self.process_server_auth(message)
+            if not flag:
+                message = {'type': 'SERVER_AUTH_FAILED'}
+                secure_message = self.encrypt_payload(message)
+                self._send(secure_message)
+                self.send_mac()
+            if flag:
+                return 
         
         elif mtype == 'AUTH_SUCCESS':
             logger.info('User authenticated with success.')
@@ -210,6 +230,7 @@ class ClientProtocol(asyncio.Protocol):
         elif mtype == 'DH_PARAMETERS_RESPONSE':
             logger.debug('DH_PARAMETERS_RESPONSE')
             public_key=bytes(message['parameters']['public_key'],'ISO-8859-1')
+            
             #Create shared key with the server public key
             self.crypto.create_shared_key(public_key)
             
@@ -222,10 +243,28 @@ class ClientProtocol(asyncio.Protocol):
                 self.send_file(self.file_name)
                 
             elif self.state==STATE_DH:
-                secure_message = self.encrypt_payload({'type': 'OPEN', 'file_name': self.file_name})
+
+                #message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.nonce).decode()}
+
+                #Generate a new NONCE
+                self.crypto.auth_nonce=os.urandom(16)
+                print(f"Nonce: {self.crypto.auth_nonce}")
+                message = {'type': 'SERVER_AUTH_REQUEST', 'nonce':  str(self.crypto.auth_nonce,'ISO-8859-1')}
+                secure_message = self.encrypt_payload(message)
                 self._send(secure_message)
                 self.send_mac()
-                self.state = STATE_OPEN
+                self.state = STATE_SERVER_AUTH
+            
+                #self._send(message)
+                #self.state=STATE_DH
+                #self.state = STATE_LOGIN_REQ 
+                #self.state = STATE_SERVER_AUTH    
+                
+                
+                '''secure_message = self.encrypt_payload({'type': 'OPEN', 'file_name': self.file_name})
+                self._send(secure_message)
+                self.send_mac()
+                self.state = STATE_OPEN'''
 
             return
 
@@ -255,6 +294,36 @@ class ClientProtocol(asyncio.Protocol):
         self.transport.close()
         self.loop.stop()
 
+    def process_server_auth(self, message):
+        self.crypto.signature = bytes(message['signature'], 'ISO-8859-1')
+        server_cert_filename=message['server_cert']
+        server_ca_cert_folder=message['server_roots']
+
+
+        self.crypto.server_cert=self.crypto.load_cert(server_cert_filename)
+        self.crypto.server_public_key=self.crypto.server_cert.public_key()
+
+        # Validate server signature
+        flag1=self.crypto.rsa_signature_verification(self.crypto.signature,self.crypto.auth_nonce,self.crypto.server_public_key)
+        logger.info(f'Server signature validation: {flag1}')
+
+        #Validate common name
+        flag2=self.host_name==self.crypto.get_common_name(self.crypto.server_cert)
+        logger.info(f'Server common_name validation: {flag2}')
+
+        #Validate chain
+        flag3=self.crypto.validate_chain(self.crypto.server_cert,server_ca_cert_folder)
+
+        logger.info(f'Server chain validation: {flag3}')
+
+        if flag1 and flag2 and flag3:
+            logger.info("Server validated")
+            return True
+        else:
+            return False
+
+         
+    
     def process_challenge(self, message):
         self.credentials['username'] = input("Username: ")
         self.credentials['password'] = getpass.getpass("Password: ")

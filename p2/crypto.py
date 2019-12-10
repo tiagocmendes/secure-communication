@@ -19,6 +19,8 @@ import base64
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import utils, rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.x509.oid import NameOID
+
 
 
 """
@@ -50,6 +52,13 @@ class Crypto:
         self.intermediate_certs = dict()
         self.user_cert = dict()
         self.chain=list()
+        self.server_cert=None
+        self.rsa_public_key=None
+        self.rsa_private_key=None
+        self.signature=None
+        self.server_public_key=None
+        self.auth_nonce=None
+        self.server_ca_cert=None
     
     """
     Called to generate the shared key in the server.
@@ -259,6 +268,10 @@ class Crypto:
             return ct
         return ct[:-ct[-1]]
 
+    def load_key_from_file(self,filename):
+        with open(filename, "rb") as f:
+           private_key=serialization.load_pem_private_key(f.read(),password=None,backend=default_backend())
+        return private_key
     
     def validate_cert(self,cert):
         today = datetime.now().timestamp()
@@ -266,33 +279,79 @@ class Crypto:
         return cert.not_valid_before.timestamp() <= today <= cert.not_valid_after.timestamp()
 
     def load_cert(self,filename):
+        
         with open(filename, "rb") as pem_file:
             pem_data = pem_file.read()
             cert = x509.load_pem_x509_certificate(pem_data, default_backend())
 
-        if self.validate_cert(cert):
-            return cert
+        return cert
         
     def build_issuers(self,chain, cert):
-            chain.append(cert)
+        chain.append(cert)
 
-            issuer = cert.issuer.rfc4514_string()
-            subject = cert.subject.rfc4514_string()
-            print("----")
-            print(f"Issuer : {issuer}")
-            print(f"Subject : {subject}")
-            print("----")
+        issuer = cert.issuer.rfc4514_string()
+        subject = cert.subject.rfc4514_string()
+        print("----")
+        print(f"Issuer : {issuer}")
+        print(f"Subject : {subject}")
+        print("----")
 
-            if issuer == subject and subject in self.roots:
-                return 
+        if issuer == subject and subject in self.roots:
+            return 
+        
+        if issuer in self.intermediate_certs:
+            return self.build_issuers(chain, self.intermediate_certs[issuer])
+        
+        if issuer in self.roots:
+            return self.build_issuers(chain, self.roots[issuer])
+        
+        return
+
+    def validate_chain(self,base_cert, root_cert_folder):
+        path = root_cert_folder
+    
+        print(f"Scanning {path}...")
+        folder = os.scandir(path)
+        
+        invalid = 0
+        print(f"Loading certificates...")
+        for entry in folder:
+            if entry.is_file() and '.pem' in entry.name:
+                cert = self.load_cert(path + "/" + entry.name)
+                if cert is not None:
+                    self.roots[cert.subject.rfc4514_string()] = cert
+                else: 
+                    invalid += 1
+                    
             
-            if issuer in self.intermediate_certs:
-                return self.build_issuers(chain, self.intermediate_certs[issuer])
+        print(f"Loaded {len(self.roots)} root valid certificates, {invalid} rejected!")
+        self.build_issuers(self.chain,base_cert)
+
+        print(f"Validating validaty")
+        flag=True
+        for cert in self.chain:
+            flag=self.validate_cert(cert)
             
-            if issuer in self.roots:
-                return self.build_issuers(chain, self.roots[issuer])
+
+        for i in range(0,len(self.chain)):
+            if i==len(self.chain)-1:
+                break
+
+            #Validate cert signature
+            flag=self.validate_cert_signature(self.chain[i],self.chain[i+1])
+            if not flag:
+                return Flag
+
+            #Validate common name with issuer
+            #flag=self.validate_cert_common_name(self.chain[i],self.chain[i+1])
+
+            #Validate purpose
+
+            #Validate ocsp
             
-            return
+        return flag
+        
+
     
     def key_pair_gen(self, password, length):
         valid_lengths = [1024, 2048, 3072, 4096]
@@ -345,6 +404,78 @@ class Crypto:
         )
 
         return ciphertext
+    
+    def validate_cert_signature(self,cert_to_check,issuer_cert):
+
+        cert_to_check_signature=cert_to_check.signature
+        issuer_public_key=issuer_cert.public_key()
+
+        try:
+            issuer_public_key.verify(cert_to_check_signature,cert_to_check.tbs_certificate_bytes,padding.PKCS1v15(),cert_to_check.signature_hash_algorithm)
+        except:
+            print("Failed to verify signature.")
+            return False
+    
+        return True
+
+    def validate_cert_common_name(self,cert_to_check,issuer_cert):
+
+        if (self.get_issuer_common_name(cert_to_check)!=self.get_common_name(issuer_cert)):
+            print(self.get_issuer_common_name(cert_to_check))
+            print(self.get_common_name(issuer_cert))
+            return False 
+        
+        return True
+
+    def get_common_name(self,cert):
+        try:
+            names = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+            return names[0].value
+        except x509.ExtensionNotFound:
+            return None
+
+    def get_issuer_common_name(self,cert):
+        print(cert.issuer)
+        try:
+            names = cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)
+            return names[0].value
+        except x509.ExtensionNotFound:
+            return None
+
+    def rsa_signing(self, message, private_key):
+    
+
+
+        signature = private_key.sign(
+            message,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+
+        return signature
+
+    def rsa_signature_verification (self,signature, message, public_key):
+        try:
+            public_key.verify(
+                signature,
+                message,
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH
+                ),
+                hashes.SHA256()
+            )
+        except:
+            #print("Server signature validation failed!")
+            return False
+        
+        return True
+        
+
+        #return signature
 
     def rsa_decryption(self, password, ciphertext, private_key):
         

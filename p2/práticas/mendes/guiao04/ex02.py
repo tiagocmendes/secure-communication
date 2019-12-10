@@ -77,7 +77,9 @@ def get_issuer_common_name(cert):
         return None
 
 
-def get_common_name(cert):
+def get_public_key_from_cert(self):
+
+def get_common_name(self,cert):
     try:
         names = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
         return names[0].value
