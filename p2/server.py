@@ -249,6 +249,7 @@ class ClientHandler(asyncio.Protocol):
 		Here, the server must send a challenge to the client.
 		"""
 		self.crypto.server_cert=self.crypto.load_cert("server_cert/secure_server.pem")
+		self.crypto.server_ca_cert=self.crypto.load_cert("server_roots/Secure_Server_CA.pem")
 		self.crypto.rsa_public_key=self.crypto.server_cert.public_key()
 		self.crypto.rsa_private_key=self.crypto.load_key_from_file("server_cert/server_key.pem")
 		nonce=bytes(message['nonce'],'ISO-8859-1')
@@ -256,8 +257,7 @@ class ClientHandler(asyncio.Protocol):
 		#Encrypt NONCE received by client
 		self.crypto.signature = self.crypto.rsa_signing(nonce, self.crypto.rsa_private_key)
 
-		message={'type':'SERVER_AUTH_RESPONSE','signature':str(self.crypto.signature,'ISO-8859-1'),'server_cert':"server_cert/secure_server.pem",'server_roots':"server_roots"}
-
+		message={'type':'SERVER_AUTH_RESPONSE','signature':str(self.crypto.signature,'ISO-8859-1'),'server_cert':str(self.crypto.get_certificate_bytes(self.crypto.server_cert),'ISO-8859-1'),'server_roots':str(self.crypto.get_certificate_bytes(self.crypto.server_ca_cert),'ISO-8859-1')}
 		self._send(message)
 		return True
 	
@@ -516,6 +516,7 @@ class ClientHandler(asyncio.Protocol):
 		logger.debug("Process Secure: {}".format(self.encrypted_data))
 		message = json.loads(self.decrypted_data[0])
 		mtype = message['type'] 
+		print(mtype)
 		
 		if mtype == 'OPEN':
 			print(self.state)

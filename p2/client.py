@@ -324,12 +324,12 @@ class ClientProtocol(asyncio.Protocol):
 
     def process_server_auth(self, message):
         self.crypto.signature = bytes(message['signature'], 'ISO-8859-1')
-        server_cert_filename=message['server_cert']
-        server_ca_cert_folder=message['server_roots']
+        server_cert_bytes=bytes(message['server_cert'],'ISO-8859-1')
+        server_ca_cert_bytes=bytes(message['server_roots'],'ISO-8859-1')
 
-
-        self.crypto.server_cert=self.crypto.load_cert(server_cert_filename)
+        self.crypto.server_cert=self.crypto.load_cert_bytes(server_cert_bytes)
         self.crypto.server_public_key=self.crypto.server_cert.public_key()
+        self.crypto.server_ca_cert=self.crypto.load_cert_bytes(server_ca_cert_bytes)
 
         # Validate server signature
         flag1=self.crypto.rsa_signature_verification(self.crypto.signature,self.crypto.auth_nonce,self.crypto.server_public_key)
@@ -340,7 +340,7 @@ class ClientProtocol(asyncio.Protocol):
         logger.info(f'Server common_name validation: {flag2}')
 
         #Validate chain
-        flag3=self.crypto.validate_chain(self.crypto.server_cert,server_ca_cert_folder)
+        flag3=self.crypto.validate_server_chain(self.crypto.server_cert,self.crypto.server_ca_cert)
 
         logger.info(f'Server chain validation: {flag3}')
 

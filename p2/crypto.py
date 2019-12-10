@@ -9,6 +9,7 @@ import binascii
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes 
 from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives import serialization as crypto_serialization
+
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import dh
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
@@ -267,6 +268,9 @@ class Crypto:
         if self.cipher_mode=='GCM' or self.symmetric_cipher=='ChaCha20':
             return ct
         return ct[:-ct[-1]]
+    
+    def get_certificate_bytes(self,cert):
+        return cert.public_bytes(crypto_serialization.Encoding.PEM)
 
     def load_key_from_file(self,filename):
         with open(filename, "rb") as f:
@@ -278,6 +282,9 @@ class Crypto:
 
         return cert.not_valid_before.timestamp() <= today <= cert.not_valid_after.timestamp()
 
+    def load_cert_bytes(self,cert_bytes):
+        return x509.load_pem_x509_certificate(cert_bytes, default_backend())
+    
     def load_cert(self,filename):
         
         with open(filename, "rb") as pem_file:
@@ -307,6 +314,42 @@ class Crypto:
         
         return
 
+    
+    def validate_server_chain(self,base_cert, root_cert):
+    
+        print(f"Loading certificates...")
+        
+        self.roots[root_cert.subject.rfc4514_string()] = root_cert
+                
+                    
+            
+        print(f"Loaded {len(self.roots)} root certificates!")
+        self.build_issuers(self.chain,base_cert)
+
+        print(f"Validating validaty")
+        flag=True
+        for cert in self.chain:
+            flag=self.validate_cert(cert)
+            
+
+        for i in range(0,len(self.chain)):
+            if i==len(self.chain)-1:
+                break
+
+            #Validate cert signature
+            flag=self.validate_cert_signature(self.chain[i],self.chain[i+1])
+            if not flag:
+                return flag
+
+            #Validate common name with issuer
+            #flag=self.validate_cert_common_name(self.chain[i],self.chain[i+1])
+
+            #Validate purpose
+
+            #Validate ocsp
+            
+        return flag
+    
     def validate_chain(self,base_cert, root_cert_folder):
         path = root_cert_folder
     
