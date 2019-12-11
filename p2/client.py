@@ -60,7 +60,7 @@ class ClientProtocol(asyncio.Protocol):
         self.server_public_key = None
         self.nonce = os.urandom(16)
         self.server_nonce = None
-        self.validation_type="CITIZEN_CARD" #Challenge or Citzent card
+        self.validation_type="Challenge" #Challenge or Citzent card
     
     def log_state(self, received):
         states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']

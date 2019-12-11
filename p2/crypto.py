@@ -4,6 +4,7 @@ import base64
 import argparse
 import coloredlogs, logging
 import PyKCS11
+import wget
 
 import os
 import getpass
@@ -321,38 +322,38 @@ class Crypto:
     
     def validate_server_chain(self,base_cert, root_cert):
     
-        print(f"Loading certificates...")
-        
         self.roots[root_cert.subject.rfc4514_string()] = root_cert
                 
-                    
-            
-        print(f"Loaded {len(self.roots)} root certificates!")
         self.build_issuers(self.chain,base_cert)
 
-        print(f"Validating validaty")
-        flag=True
-        for cert in self.chain:
+        
+        for i,cert in enumerate(self.chain):
             flag=self.validate_cert(cert)
+            flag3=self.validate_server_purpose(cert,i)
             
+            if not flag or not flag3:
+                return False
 
         for i in range(0,len(self.chain)):
             if i==len(self.chain)-1:
                 break
 
             #Validate cert signature
-            flag=self.validate_cert_signature(self.chain[i],self.chain[i+1])
-            if not flag:
-                return flag
+            flag1=self.validate_cert_signature(self.chain[i],self.chain[i+1])
 
             #Validate common name with issuer
-            #flag=self.validate_cert_common_name(self.chain[i],self.chain[i+1])
+            flag2=self.validate_cert_common_name(self.chain[i],self.chain[i+1])
 
-            #Validate purpose
+            #Validate crl
+            flag4=self.validate_revocation(self.chain[i],self.chain[i+1])
 
-            #Validate ocsp
+
+            if not flag1 or not flag2 or flag4:
+                return False
+
+
             
-        return flag
+        return flag and flag1 and flag2
     
     def validate_chain(self,base_cert, root_cert_folder):
         path = root_cert_folder
@@ -390,10 +391,10 @@ class Crypto:
                 return flag
 
             #Validate common name with issuer
-            #flag=self.validate_cert_common_name(self.chain[i],self.chain[i+1])
+            flag=self.validate_cert_common_name(self.chain[i],self.chain[i+1])
 
             #Validate purpose
-
+            flag
             #Validate ocsp
             
         return flag
@@ -446,7 +447,17 @@ class Crypto:
         )
 
         return ciphertext
-    
+
+    def load_cert_revocation_list(self,filename,file_type):
+        with open(filename, "rb") as pem_file:
+            pem_data = pem_file.read()
+            if file_type=="der":
+                cert = x509.load_der_x509_crl(pem_data, default_backend())
+            elif file_type=="pem":
+                cert = x509.load_pem_x509_crl(pem_data, default_backend())
+
+        return cert
+
     def validate_cert_signature(self,cert_to_check,issuer_cert):
 
         cert_to_check_signature=cert_to_check.signature
@@ -460,29 +471,89 @@ class Crypto:
     
         return True
 
-    def validate_purpose(self,cert):
-        print(cert.extensions.get_extension_for_class(x509.KeyUsage).value)
+    def validate_server_purpose(self,cert,index):
+
+        if index==0:
+            flag=False
+            for c in cert.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value:
+                if c.dotted_string=="1.3.6.1.5.5.7.3.1":
+                    flag=True
+                    break
+            return flag
+        else:
+            if cert.extensions.get_extension_for_class(x509.KeyUsage).value.key_cert_sign==True :
+                return True
+            else:
+                return False
 
 
     def validate_revocation(self,cert_to_check,issuer_cert):
         
-        builder = ocsp.OCSPRequestBuilder()
+        try:
+            builder = ocsp.OCSPRequestBuilder()
+            
+            builder = builder.add_certificate(cert_to_check, issuer_cert, SHA1())
+            req = builder.build()
+
+            for j in cert_to_check.extensions.get_extension_for_class(x509.AuthorityInformationAccess).value:
+                if j.access_method.dotted_string == "1.3.6.1.5.5.7.48.1": 
+                    rev_list=None
+
+                    #Downloading list
+                    der=req.public_bytes(serialization.Encoding.DER)
+
+                    ocsp_link=j.access_location.value
+                    r=requests.post(ocsp_link,data=der)
+
+                    ocsp_resp = ocsp.load_der_ocsp_response(r.content)
+                    print(ocsp_resp.certificate_status)
+        except:
+            print("OCSP not available")
         
-        builder = builder.add_certificate(cert_to_check, issuer_cert, SHA1())
-        req = builder.build()
+        try:
+            for i in cert_to_check.extensions.get_extension_for_class(x509.CRLDistributionPoints).value:
+                for b in i.full_name:
+                    rev_list=None
+                    #Downloading list
+                    file_name=wget.download(b.value)
 
-        for j in cert_to_check.extensions.get_extension_for_class(x509.AuthorityInformationAccess).value:
-            if j.access_method.dotted_string == "1.3.6.1.5.5.7.48.1": 
-                rev_list=None
+                    #read revocation list
+                    try:
+                        rev_list=self.load_cert_revocation_list(file_name,"pem")
+                    except Exception as e :
+                        print(e)
+                    try:
+                        rev_list=self.load_cert_revocation_list(file_name,"der")
+                    except:
+                        print("Not der.")
+                    if rev_list is None:
+                        return False
+                    
+                    flag=cert_to_check.serial_number in [l.serial_number for l in rev_list]
 
-                #Downloading list
-                der=req.public_bytes(serialization.Encoding.DER)
+            for i in issuer_cert.extensions.get_extension_for_class(x509.CRLDistributionPoints).value:
+                for b in i.full_name:
+                    rev_list=None
+                    #Downloading list
+                    file_name=wget.download(b.value)
 
-                ocsp_link=j.access_location.value
-                r=requests.post(ocsp_link,data=der)
+                    #read revocation list
+                    try:
+                        rev_list=self.load_cert_revocation_list(file_name,"pem")
+                    except Exception as e :
+                        print(e)
+                    try:
+                        rev_list=self.load_cert_revocation_list(file_name,"der")
+                    except:
+                        print("Not der.")
+                    if rev_list is None:
+                        return False
+                    
+                    flag1=issuer_cert.serial_number in [l.serial_number for l in rev_list]
 
-                ocsp_resp = ocsp.load_der_ocsp_response(r.content)
-                print(ocsp_resp.certificate_status)
+                    return flag1 or flag
+        except Exception as e:
+            print("CRL not available")
 
 
     def validate_cert_common_name(self,cert_to_check,issuer_cert):
