@@ -60,7 +60,7 @@ class ClientProtocol(asyncio.Protocol):
         self.server_public_key = None
         self.nonce = os.urandom(16)
         self.server_nonce = None
-        self.validation_type="Challenge" #Challenge or Citzent card
+        self.validation_type="CITIZEN_CARD" #Challenge or Citzent card
     
     def log_state(self, received):
         states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']
@@ -188,6 +188,10 @@ class ClientProtocol(asyncio.Protocol):
         if mtype == 'CHALLENGE_REQUEST':
             self.process_challenge(message)
             return 
+        elif mtype == 'CARD_LOGIN_RESPONSE':
+            self.process_login_response(message)
+            return
+
         elif mtype == 'SERVER_AUTH_RESPONSE':
             flag=self.process_server_auth(message)
             if not flag:
@@ -201,11 +205,16 @@ class ClientProtocol(asyncio.Protocol):
                 self.crypto.auth_nonce=os.urandom(16)
 
                 self.state=STATE_CLIENT_AUTH
-                
-                message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.crypto.auth_nonce).decode()}
-                secure_message = self.encrypt_payload(message)
-                self._send(secure_message)
-                self.send_mac()
+                if self.validation_type=="Challenge":
+                    message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.crypto.auth_nonce).decode()}
+                    secure_message = self.encrypt_payload(message)
+                    self._send(secure_message)
+                    self.send_mac()
+                elif self.validation_type=="CITIZEN_CARD":
+                    message = {'type': 'CARD_LOGIN_REQUEST', 'nonce':  base64.b64encode(self.crypto.auth_nonce).decode()}
+                    secure_message = self.encrypt_payload(message)
+                    self._send(secure_message)
+                    self.send_mac()
             
                 return 
         
@@ -357,7 +366,21 @@ class ClientProtocol(asyncio.Protocol):
         self._send(secure_message)
         self.send_mac()
         self.state = STATE_OPEN
-         
+    
+    def process_login_response(self, message):
+        
+
+        self.server_nonce = str(base64.b64decode(message['nonce'].encode()))
+        signature =self.crypto.card_signing(str(self.crypto.auth_nonce)+self.server_nonce)  
+        
+        message['type'] = 'CHALLENGE_RESPONSE'
+        message['credentials'] = {}
+        message['credentials']['username'] = self.credentials['username']
+        message['credentials']['encrypted_password'] = base64.b64encode(self.encrypted_password).decode()
+        self._send(message)
+
+            # IMPORTANTE PARA O SERVER print(self.crypto.rsa_decryption(self.encrypted_password, base64.b64decode(message['private_key'].encode())))
+        return 
     
     def process_challenge(self, message):
         self.credentials['username'] = input("Username: ")

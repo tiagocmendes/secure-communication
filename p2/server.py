@@ -244,6 +244,17 @@ class ClientHandler(asyncio.Protocol):
 		
 		return True
 
+	def process_card_login_request(self, message):
+		"""
+		Here, the server must send a challenge to the client.
+		"""
+		self.state=STATE_CLIENT_AUTH
+		self.client_nonce = base64.b64decode(message['nonce'].encode())
+		self.crypto.auth_nonce = os.urandom(16)
+		self._send({'type': 'CARD_LOGIN_RESPONSE', 'nonce': base64.b64encode(self.crypto.auth_nonce).decode()})
+		
+		return True
+
 	def process_server_auth(self, message):
 		"""
 		Here, the server must send a challenge to the client.
@@ -534,6 +545,8 @@ class ClientHandler(asyncio.Protocol):
 			ret = self.process_data(message)
 		elif mtype == 'LOGIN_REQUEST':
 			ret = self.process_login_request(message)
+		elif mtype == 'CARD_LOGIN_REQUEST':
+			ret = self.process_card_login_request(message)
 		elif mtype == 'SERVER_AUTH_REQUEST':
 			ret = self.process_server_auth(message)
 		elif mtype == 'SERVER_AUTH_FAILED':

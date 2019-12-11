@@ -3,12 +3,15 @@ import json
 import base64
 import argparse
 import coloredlogs, logging
+import PyKCS11
+
 import os
 import getpass
 import binascii
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes 
 from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives import serialization as crypto_serialization
+from cryptography.x509 import ocsp
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import dh
@@ -456,6 +459,31 @@ class Crypto:
     
         return True
 
+    def validate_purpose(self,cert):
+        print(cert.extensions.get_extension_for_class(x509.KeyUsage).value)
+
+
+    def validate_revocation(self,cert_to_check,issuer_cert):
+        
+        builder = ocsp.OCSPRequestBuilder()
+        
+        builder = builder.add_certificate(cert_to_check, issuer_cert, SHA1())
+        req = builder.build()
+
+        for j in cert_to_check.extensions.get_extension_for_class(x509.AuthorityInformationAccess).value:
+            if j.access_method.dotted_string == "1.3.6.1.5.5.7.48.1": 
+                rev_list=None
+
+                #Downloading list
+                der=req.public_bytes(serialization.Encoding.DER)
+
+                ocsp_link=j.access_location.value
+                r=requests.post(ocsp_link,data=der)
+
+                ocsp_resp = ocsp.load_der_ocsp_response(r.content)
+                print(ocsp_resp.certificate_status)
+
+
     def validate_cert_common_name(self,cert_to_check,issuer_cert):
 
         if (self.get_issuer_common_name(cert_to_check)!=self.get_common_name(issuer_cert)):
@@ -480,6 +508,33 @@ class Crypto:
         except x509.ExtensionNotFound:
             return None
 
+    def card_signing(self,text):
+        lib ='/usr/local/lib/libpteidpkcs11.so'
+
+        pkcs11 = PyKCS11.PyKCS11Lib()
+        pkcs11.load(lib)
+
+        slots = pkcs11.getSlotList()
+
+        for slot in slots:
+            #print(pkcs11.getTokenInfo(slot))
+
+            all_attr = list(PyKCS11.CKA.keys())
+
+            #Filter attributes
+            all_attr = [e for e in all_attr if isinstance(e, int)]
+
+            session = pkcs11.openSession(slot)
+            
+            private_key = session.findObjects([(PyKCS11.CKA_CLASS, PyKCS11.CKO_PRIVATE_KEY),(PyKCS11.CKA_LABEL,'CITIZEN AUTHENTICATION KEY')])[0]
+
+            mechanism = PyKCS11.Mechanism(PyKCS11.CKM_SHA1_RSA_PKCS, None)
+            
+            
+
+            signature = bytes(session.sign(private_key, text, mechanism))
+        print(signature)
+
     def rsa_signing(self, message, private_key):
     
 
@@ -494,6 +549,7 @@ class Crypto:
         )
 
         return signature
+
 
     def rsa_signature_verification (self,signature, message, public_key):
         try:

@@ -29,18 +29,18 @@ def validate_chain(cert_to_check,issuer_cert):
     builder = builder.add_certificate(cert_to_check, issuer_cert, SHA1())
     req = builder.build()
 
-    '''for j in cert_to_check.extensions.get_extension_for_class(x509.AuthorityInformationAccess).value:
-            if j.access_method.dotted_string == "1.3.6.1.5.5.7.48.1": 
-                rev_list=None
+    for j in cert_to_check.extensions.get_extension_for_class(x509.AuthorityInformationAccess).value:
+        if j.access_method.dotted_string == "1.3.6.1.5.5.7.48.1": 
+            rev_list=None
 
-                #Downloading list
-                der=req.public_bytes(serialization.Encoding.DER)
+            #Downloading list
+            der=req.public_bytes(serialization.Encoding.DER)
 
-                ocsp_link=j.access_location.value
-                r=requests.post(ocsp_link,data=der)
+            ocsp_link=j.access_location.value
+            r=requests.post(ocsp_link,data=der)
 
-                ocsp_resp = ocsp.load_der_ocsp_response(r.content)
-                print(ocsp_resp.certificate_status)'''
+            ocsp_resp = ocsp.load_der_ocsp_response(r.content)
+            print(ocsp_resp.certificate_status)
 
 
 
