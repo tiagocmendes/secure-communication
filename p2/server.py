@@ -210,6 +210,7 @@ class ClientHandler(asyncio.Protocol):
 			message={'type':'DH_PARAMETERS_RESPONSE','parameters':{'public_key':str(self.crypto.public_key,'ISO-8859-1')}}
 			self._send(message)
 			if self.state==STATE_DATA:
+				# enviar do tipo server_secure_x
 				self.state=STATE_KEY_ROTATION
 			else:
 				self.state=STATE_DH
@@ -232,6 +233,48 @@ class ClientHandler(asyncio.Protocol):
 
 			self.state = STATE_CLOSE
 			self.transport.close()
+
+	def encrypt_payload(self, message: dict) -> None:
+		"""
+        Called when a secure message will be sent, in order to encrypt its payload.
+
+        @param message: JSON message of type OPEN, DATA or CLOSE
+        """
+		secure_message = {'type': 'SECURE_X', 'payload': None}
+		payload = json.dumps(message).encode()
+		if self.crypto.cipher_mode=='GCM':
+			criptogram = self.crypto.file_encryption(payload,b"HELLO")
+		else:
+			criptogram = self.crypto.file_encryption(payload)
+		secure_message['payload'] = base64.b64encode(criptogram).decode()
+		self.encrypted_data += secure_message['payload']
+
+		return secure_message
+    
+	def send_mac(self) -> None:
+        """
+        Called when a secure message is sent and a MAC is necessary to check message authenticity.
+        """
+        self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
+        #logger.debug("My MAC: {}".format(self.crypto.mac))
+        if self.crypto.iv is None:
+            iv=''
+        else:
+            iv=base64.b64encode(self.crypto.iv).decode()
+
+        if self.crypto.gcm_tag is None:
+            tag=''
+        else:
+            tag=base64.b64encode(self.crypto.gcm_tag).decode()
+
+        if self.crypto.nonce is None:
+            nonce=''
+        else:
+            nonce=base64.b64encode(self.crypto.nonce).decode()
+
+        message = {'type': 'MAC', 'data': base64.b64encode(self.crypto.mac).decode(), 'iv':iv,'tag':tag,'nonce':nonce}
+        self._send(message)
+        self.encrypted_data = ''
 
 	def process_login_request(self, message):
 		"""

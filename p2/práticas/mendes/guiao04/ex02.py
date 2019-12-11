@@ -77,7 +77,6 @@ def get_issuer_common_name(cert):
         return None
 
 
-def get_public_key_from_cert(self):
 
 def get_common_name(self,cert):
     try:
@@ -204,12 +203,12 @@ def main():
     print(f"Loaded {len(roots)} root valid certificates, {invalid} rejected!")
     
     print("Loading user cert")
-    my_cert=load_cert("/home/joao/Documents/Documents/3º_ano/SIO/Projeto SIO/secure-communication/p2/server_cert/secure_server.pem")
+    my_cert=load_cert("/home/joao/Documents/Documents/3º_ano/SIO/Projeto SIO/secure-communication/p2/práticas/mendes/guiao04/SECURE_CA.pem")
     if my_cert is not None:
         user_cert[my_cert.subject.rfc4514_string()] = my_cert
 
         
-    validate_revogation_status(cert)
+    validate_revogation_status(my_cert)
     validate_chain(my_cert,cert)
 
     print("Loading intermidiate cert")

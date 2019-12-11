@@ -55,6 +55,7 @@ class ClientProtocol(asyncio.Protocol):
         self.crypto = Crypto(self.choosen_cipher, self.choosen_mode, self.choosen_digest)
 
         self.encrypted_data = ''
+        self.decrypted_data=[]
 
         self.credentials = {}
         self.server_public_key = None
@@ -304,6 +305,33 @@ class ClientProtocol(asyncio.Protocol):
                 self.state = STATE_OPEN'''
 
             return
+        
+        elif mtype == 'SERVER_SECURE_X':
+			self.encrypted_data += message['payload']
+			ret = True
+            return
+
+		elif mtype == 'MAC':
+			
+			(ret,error)= self.process_mac(message)
+			
+			if ret:
+				iv=base64.b64decode(message['iv'])
+				tag=base64.b64decode(message['tag'])
+				nonce=base64.b64decode(message['nonce'])
+
+				if iv=='':
+					iv=None
+				if tag=='':
+					tag=None
+				if nonce=='':
+					nonce=None
+
+				self.decrypted_data.append(self.crypto.decryption(base64.b64decode(self.encrypted_data.encode()),iv,tag,nonce))
+
+				# process secure message
+				self.process_secure()
+                return
 
         elif mtype == 'NEGOTIATION_RESPONSE':
             logger.debug("Negotiation response")
@@ -358,6 +386,168 @@ class ClientProtocol(asyncio.Protocol):
             return True
         else:
             return False
+
+    def process_secure(self):
+		"""
+		Processes a SECURE_X message from the client.
+		It has an encrypted payload that should be decrypted.
+		The payload has a JSON message that could be of type OPEN, DATA or CLOSE.
+		"""
+		logger.debug("Process Secure: {}".format(self.encrypted_data))
+		message = json.loads(self.decrypted_data[0])
+		mtype = message['type'] 
+		
+		if mtype == 'CHALLENGE_REQUEST':
+            self.process_challenge(message)
+             
+        elif mtype == 'CARD_LOGIN_RESPONSE':
+            self.process_login_response(message)
+            
+
+        elif mtype == 'SERVER_AUTH_RESPONSE':
+            flag=self.process_server_auth(message)
+            if not flag:
+                message = {'type': 'SERVER_AUTH_FAILED'}
+                secure_message = self.encrypt_payload(message)
+                self._send(secure_message)
+                self.send_mac()
+            if flag:
+
+                #Generate a new NONCE
+                self.crypto.auth_nonce=os.urandom(16)
+
+                self.state=STATE_CLIENT_AUTH
+                if self.validation_type=="Challenge":
+                    message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.crypto.auth_nonce).decode()}
+                    secure_message = self.encrypt_payload(message)
+                    self._send(secure_message)
+                    self.send_mac()
+                elif self.validation_type=="CITIZEN_CARD":
+                    message = {'type': 'CARD_LOGIN_REQUEST', 'nonce':  base64.b64encode(self.crypto.auth_nonce).decode()}
+                    secure_message = self.encrypt_payload(message)
+                    self._send(secure_message)
+                    self.send_mac()
+            
+                 
+        
+        elif mtype == 'AUTH_RESPONSE':
+            if message['status'] == 'SUCCESS':
+                self.process_authentication(message)
+            elif message['status'] == 'DENIED':
+                logger.info('User authentication denied.')
+            else:
+                logger.info('User authentication failed.')
+                self.nonce = os.urandom(16)
+                message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.nonce).decode()}
+                self._send(message)
+                self.state = STATE_LOGIN_REQ 
+            
+        
+        elif mtype == 'FILE_REQUEST_RESPONSE':
+            if message['status'] == 'PERMISSION_GRANTED':
+                logger.info('Permission granted to transfer the file.')
+                message = {'type':'NEGOTIATION','algorithms':{'symetric_ciphers':self.symetric_ciphers,'chiper_modes':self.cipher_modes,'digest':self.digest}}
+                self._send(message)
+                self.state = STATE_NEGOTIATION
+            else:
+                logger.info('Permission denied to transfer the file.')
+            
+
+        elif mtype == 'OK':  # Server replied OK. We can advance the state
+            if self.state == STATE_OPEN:
+                logger.info("Channel open")
+                
+                self.send_file(self.file_name)
+            elif self.state == STATE_DATA:  # Got an OK during a message transfer.
+                # Reserved for future use
+                pass
+            else:
+                logger.warning("Ignoring message from server")
+            
+
+        elif mtype == 'ERROR':
+            logger.warning("Got error from server: {}".format(message.get('data', None)))
+
+        elif mtype=='INTEGRITY_CONTROL':
+            flag=message['data']
+            if flag=='True':
+                self._send(self.encrypt_payload({'type': 'CLOSE'}))
+                self.send_mac()
+                logger.info("File transferred. Closing transport")
+                self.transport.close()
+
+        elif mtype == 'DH_PARAMETERS_RESPONSE':
+            logger.debug('DH_PARAMETERS_RESPONSE')
+            public_key=bytes(message['parameters']['public_key'],'ISO-8859-1')
+            
+            #Create shared key with the server public key
+            self.crypto.create_shared_key(public_key)
+            
+            # Generate a symetric key
+            self.crypto.symmetric_key_gen()
+            logger.debug("Key: {}".format(self.crypto.symmetric_key))
+
+            if self.state==STATE_KEY_ROTATION:
+                self.state = STATE_OPEN
+                self.send_file(self.file_name)
+                
+            elif self.state==STATE_DH:
+
+                #message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.nonce).decode()}
+
+                #Generate a new NONCE
+                self.crypto.auth_nonce=os.urandom(16)
+                print(f"Nonce: {self.crypto.auth_nonce}")
+                message = {'type': 'SERVER_AUTH_REQUEST', 'nonce':  str(self.crypto.auth_nonce,'ISO-8859-1')}
+                secure_message = self.encrypt_payload(message)
+                self._send(secure_message)
+                self.send_mac()
+                self.state = STATE_SERVER_AUTH
+        
+        elif mtype == 'NEGOTIATION_RESPONSE':
+            logger.debug("Negotiation response")
+
+            # Receive the choosen algorithms by the server 
+            self.process_negotiation_response(message)
+
+            # Generate Diffie Helman client private and public keys
+            bytes_public_key,p,g,y=self.crypto.diffie_helman_client()
+            
+            message = {'type':'DH_PARAMETERS','parameters':{'p':p,'g':g,'public_key':str(bytes_public_key,'ISO-8859-1')}}
+            self._send(message)
+            self.state=STATE_DH
+            
+            
+
+
+        else:
+            logger.warning("Invalid message type")
+
+		self.encrypted_data = ''
+		self.decrypted_data = []
+		return True
+    
+    def process_mac(self,message: str) -> bool:
+		"""
+		Processes a MAC message from the client.
+		It checks the authenticity/integrity of a previous received message.
+
+		@param message: The message to process.
+		"""
+		logger.debug("Process MAC: {}".format(message))
+
+		client_mac = base64.b64decode(message['data'])
+
+		# Generate server MAC
+		self.crypto.mac_gen(base64.b64decode(self.encrypted_data))
+		logger.debug("Client mac: {}".format(base64.b64decode(client_mac)))
+		logger.debug("Server mac: {}".format(self.crypto.mac))
+
+		if client_mac == self.crypto.mac:
+			logger.info("Integrity controll: Success")
+			return (True, None)
+		else:
+			return (False, 'Integrity control failed.')
 
     def process_authentication(self, message):
         logger.info('User authenticated with success! Username: ' + message['username'])
