@@ -7,6 +7,7 @@ import re
 import os
 from aio_tcpserver import tcp_server
 from crypto import Crypto
+from cryptography.hazmat.primitives import serialization, hashes
 
 
 logger = logging.getLogger('root')
@@ -521,12 +522,13 @@ class ClientHandler(asyncio.Protocol):
 	def process_client_certificate(self, message):
 		self.crypto.client_cert = self.crypto.load_cert_bytes(bytes(message['cert'], 'ISO-8859-1'))
 		self.crypto.signature = bytes(message['signature'], 'ISO-8859-1')
-		print(self.crypto.client_cert)
-		print(self.crypto.signature)
-		print(str(self.client_nonce) + str(self.crypto.auth_nonce))
 
-		client_public_key = self.crypto.client_cert.public_key
-		verified = self.crypto.rsa_signature_verification(self.crypto.signature, self.client_nonce + self.crypto.auth_nonce, client_public_key)
+		client_public_key = self.crypto.client_cert.public_key()
+		# Verify client signature
+		flag = self.crypto.cc_signature_validation(self.crypto.signature,bytes(str(self.client_nonce) + str(self.crypto.auth_nonce), 'ISO-8859-1'),client_public_key)
+
+		# Verify chain
+		flag1 = self.crypto.validate_cc_chain(self.crypto.client_cert)
 
 	
 	def process_secure(self):

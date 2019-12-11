@@ -289,6 +289,9 @@ class Crypto:
 
     def load_cert_bytes(self,cert_bytes):
         return x509.load_pem_x509_certificate(cert_bytes, default_backend())
+
+    def load_cert_bytes_der(self,cert_bytes):
+        return x509.load_der_x509_certificate(cert_bytes, default_backend())
     
     def load_cert(self,filename):
         
@@ -347,7 +350,6 @@ class Crypto:
             #Validate crl
             flag4=self.validate_revocation(self.chain[i],self.chain[i+1])
 
-
             if not flag1 or not flag2 or flag4:
                 return False
 
@@ -355,14 +357,16 @@ class Crypto:
             
         return flag and flag1 and flag2
     
-    def validate_chain(self,base_cert, root_cert_folder):
-        path = root_cert_folder
-    
+    def validate_cc_chain(self,base_cert):
+
+        path='/etc/ssl/certs/'
+
+
         print(f"Scanning {path}...")
         folder = os.scandir(path)
         
         invalid = 0
-        print(f"Loading certificates...")
+        print(f"Loading root certificates...")
         for entry in folder:
             if entry.is_file() and '.pem' in entry.name:
                 cert = self.load_cert(path + "/" + entry.name)
@@ -370,34 +374,54 @@ class Crypto:
                     self.roots[cert.subject.rfc4514_string()] = cert
                 else: 
                     invalid += 1
-                    
-            
-        print(f"Loaded {len(self.roots)} root valid certificates, {invalid} rejected!")
+
+        cc_path='cc_certificates'
+
+        print(f"Scanning {cc_path}...")
+        folder = os.scandir(cc_path)
+        
+        invalid = 0
+        print(f"Loading intermediate certificates...")
+        for entry in folder:
+            if entry.is_file() and '.crt' in entry.name:
+                cert = self.load_cert(path + "/" + entry.name)
+                if cert is not None:
+                    self.intermediate_certs[cert.subject.rfc4514_string()] = cert
+                else: 
+                    invalid += 1
+    
+        print(self.intermediate_certs)       
         self.build_issuers(self.chain,base_cert)
 
-        print(f"Validating validaty")
-        flag=True
-        for cert in self.chain:
+        print(self.chain)
+
+        
+        '''for i,cert in enumerate(self.chain):
             flag=self.validate_cert(cert)
+            flag3=self.validate_server_purpose(cert,i)
             
+            if not flag or not flag3:
+                return False
 
         for i in range(0,len(self.chain)):
             if i==len(self.chain)-1:
                 break
 
             #Validate cert signature
-            flag=self.validate_cert_signature(self.chain[i],self.chain[i+1])
-            if not flag:
-                return flag
+            flag1=self.validate_cert_signature(self.chain[i],self.chain[i+1])
 
             #Validate common name with issuer
-            flag=self.validate_cert_common_name(self.chain[i],self.chain[i+1])
+            flag2=self.validate_cert_common_name(self.chain[i],self.chain[i+1])
 
-            #Validate purpose
-            flag
-            #Validate ocsp
+            #Validate crl
+            flag4=self.validate_revocation(self.chain[i],self.chain[i+1])
+
+            if not flag1 or not flag2 or flag4:
+                return False
+
+
             
-        return flag
+        return flag and flag1 and flag2'''
         
 
     
@@ -516,7 +540,6 @@ class Crypto:
                     rev_list=None
                     #Downloading list
                     file_name=wget.download(b.value)
-
                     #read revocation list
                     try:
                         rev_list=self.load_cert_revocation_list(file_name,"pem")
@@ -542,6 +565,7 @@ class Crypto:
                         rev_list=self.load_cert_revocation_list(file_name,"pem")
                     except Exception as e :
                         print(e)
+                        
                     try:
                         rev_list=self.load_cert_revocation_list(file_name,"der")
                     except:
@@ -554,6 +578,8 @@ class Crypto:
                     return flag1 or flag
         except Exception as e:
             print("CRL not available")
+        
+        return True
 
 
     def validate_cert_common_name(self,cert_to_check,issuer_cert):
@@ -611,8 +637,38 @@ class Crypto:
             attr = dict(zip(map(PyKCS11.CKA.get, all_attr), attr))
             # Load cert
             cert = x509.load_der_x509_certificate(bytes(attr['CKA_VALUE']), default_backend())
-            print(cert)
+            #print(f"Public key: {cert.public_key().public_bytes(serialization.Encoding.PEM,serialization.PublicFormat.PKCS1)}")
         return self.get_certificate_bytes(cert), signature
+
+    def card_signature_validation(self,text,signature):
+        lib ='/usr/local/lib/libpteidpkcs11.so'
+
+        pkcs11 = PyKCS11.PyKCS11Lib()
+        pkcs11.load(lib)
+
+        slots = pkcs11.getSlotList()
+
+        for slot in slots:
+            #print(pkcs11.getTokenInfo(slot))
+
+            all_attr = list(PyKCS11.CKA.keys())
+
+            #Filter attributes
+            all_attr = [e for e in all_attr if isinstance(e, int)]
+
+            session = pkcs11.openSession(slot)
+            
+            public_key = session.findObjects([(PyKCS11.CKA_CLASS, PyKCS11.CKO_PUBLIC_KEY),(PyKCS11.CKA_LABEL,'CITIZEN AUTHENTICATION KEY')])[0]
+            print(public_key)
+
+            mechanism = PyKCS11.Mechanism(PyKCS11.CKM_SHA1_RSA_PKCS, None)
+            
+
+            result = session.verify(public_key,text,signature,mechanism)
+
+            print(f"Verify: {result}")
+            
+        #return self.get_certificate_bytes(cert), signature
 
     def rsa_signing(self, message, private_key):
     
@@ -641,8 +697,23 @@ class Crypto:
                 ),
                 hashes.SHA256()
             )
-        except:
-            #print("Server signature validation failed!")
+        except Exception as e:
+            print("Server signature validation failed!")
+            return False
+        
+        return True
+    
+    def cc_signature_validation (self,signature, message, public_key):
+        
+        try:
+            public_key.verify(
+                signature,
+                message,
+                padding.PKCS1v15(),
+                hashes.SHA1()
+            )
+        except Exception as e:
+            print("Server signature validation failed!")
             return False
         
         return True

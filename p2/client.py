@@ -60,7 +60,7 @@ class ClientProtocol(asyncio.Protocol):
         self.server_public_key = None
         self.nonce = os.urandom(16)
         self.server_nonce = None
-        self.validation_type="Challenge" #Challenge or Citzent card
+        self.validation_type="CITIZEN_CARD" #Challenge or Citzent card
     
     def log_state(self, received):
         states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']
@@ -368,13 +368,9 @@ class ClientProtocol(asyncio.Protocol):
         self.state = STATE_OPEN
     
     def process_login_response(self, message):
-        
-
         self.server_nonce = str(base64.b64decode(message['nonce'].encode()))
-        cert, signature = self.crypto.card_signing(str(self.crypto.auth_nonce)+self.server_nonce)
-        print(cert)
-        print(signature)
-        print(str(self.crypto.auth_nonce)+self.server_nonce)
+        cert, signature = self.crypto.card_signing(str(self.crypto.auth_nonce)+str(self.server_nonce))
+   
         secure_message = self.encrypt_payload({'type': 'AUTH_CERTIFICATE', 'cert': str(cert, 'ISO-8859-1'), 'signature': str(signature, 'ISO-8859-1')})
         self._send(secure_message)
         self.send_mac()
