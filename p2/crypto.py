@@ -63,6 +63,7 @@ class Crypto:
         self.server_public_key=None
         self.auth_nonce=None
         self.server_ca_cert=None
+        self.client_cert=None
     
     """
     Called to generate the shared key in the server.
@@ -530,10 +531,17 @@ class Crypto:
 
             mechanism = PyKCS11.Mechanism(PyKCS11.CKM_SHA1_RSA_PKCS, None)
             
-            
-
             signature = bytes(session.sign(private_key, text, mechanism))
-        print(signature)
+
+            certificate_obj = session.findObjects([(PyKCS11.CKA_CLASS, PyKCS11.CKO_CERTIFICATE), (PyKCS11.CKA_LABEL, 'CITIZEN AUTHENTICATION CERTIFICATE')])[0]
+            # Get object attributes
+            attr = session.getAttributeValue(certificate_obj, all_attr)
+            # Create dictionary with attributes
+            attr = dict(zip(map(PyKCS11.CKA.get, all_attr), attr))
+            # Load cert
+            cert = x509.load_der_x509_certificate(bytes(attr['CKA_VALUE']), default_backend())
+            print(cert)
+        return self.get_certificate_bytes(cert), signature
 
     def rsa_signing(self, message, private_key):
     

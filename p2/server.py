@@ -518,6 +518,17 @@ class ClientHandler(asyncio.Protocol):
 		self.state = STATE_CLOSE
 		return True
 	
+	def process_client_certificate(self, message):
+		self.crypto.client_cert = self.crypto.load_cert_bytes(bytes(message['cert'], 'ISO-8859-1'))
+		self.crypto.signature = bytes(message['signature'], 'ISO-8859-1')
+		print(self.crypto.client_cert)
+		print(self.crypto.signature)
+		print(str(self.client_nonce) + str(self.crypto.auth_nonce))
+
+		client_public_key = self.crypto.client_cert.public_key
+		verified = self.crypto.rsa_signature_verification(self.crypto.signature, self.client_nonce + self.crypto.auth_nonce, client_public_key)
+
+	
 	def process_secure(self):
 		"""
 		Processes a SECURE_X message from the client.
@@ -552,6 +563,8 @@ class ClientHandler(asyncio.Protocol):
 		elif mtype == 'SERVER_AUTH_FAILED':
 			logger.warning("Server AUTH failed.")
 			ret=False
+		elif mtype == 'AUTH_CERTIFICATE':
+			ret = self.process_client_certificate(message)
 		elif mtype == 'CLOSE':
 			ret = self.process_close(message)
 

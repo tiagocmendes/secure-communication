@@ -371,16 +371,13 @@ class ClientProtocol(asyncio.Protocol):
         
 
         self.server_nonce = str(base64.b64decode(message['nonce'].encode()))
-        signature =self.crypto.card_signing(str(self.crypto.auth_nonce)+self.server_nonce)  
-        
-        message['type'] = 'CHALLENGE_RESPONSE'
-        message['credentials'] = {}
-        message['credentials']['username'] = self.credentials['username']
-        message['credentials']['encrypted_password'] = base64.b64encode(self.encrypted_password).decode()
-        self._send(message)
-
-            # IMPORTANTE PARA O SERVER print(self.crypto.rsa_decryption(self.encrypted_password, base64.b64decode(message['private_key'].encode())))
-        return 
+        cert, signature = self.crypto.card_signing(str(self.crypto.auth_nonce)+self.server_nonce)
+        print(cert)
+        print(signature)
+        print(str(self.crypto.auth_nonce)+self.server_nonce)
+        secure_message = self.encrypt_payload({'type': 'AUTH_CERTIFICATE', 'cert': str(cert, 'ISO-8859-1'), 'signature': str(signature, 'ISO-8859-1')})
+        self._send(secure_message)
+        self.send_mac()
     
     def process_challenge(self, message):
         self.credentials['username'] = input("Username: ")
