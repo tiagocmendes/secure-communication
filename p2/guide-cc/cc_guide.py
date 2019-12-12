@@ -24,9 +24,10 @@ for obj in session.findObjects():
     attr = session.getAttributeValue(obj, all_attr)
     # Create dictionary with attributes
     attr = dict(zip(map(PyKCS11.CKA.get, all_attr), attr))
-    # print(attr)
+    
     print('Label: ' + attr['CKA_LABEL'])
-    if attr['CKA_LABEL'] in ['CITIZEN AUTHENTICATION CERTIFICATE', 'AUTHENTICATION SUB CA', 'ROOT CA']:
+    if attr['CKA_LABEL'] in ['CITIZEN AUTHENTICATION CERTIFICATE']:
+        print(attr)
         cert = x509.load_der_x509_certificate(
             bytes(attr['CKA_VALUE']), default_backend())
 

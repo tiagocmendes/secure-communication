@@ -7,6 +7,7 @@ import re
 import os
 from aio_tcpserver import tcp_server
 from crypto import Crypto
+from cryptography.hazmat.primitives import serialization, hashes
 
 
 logger = logging.getLogger('root')
@@ -521,6 +522,20 @@ class ClientHandler(asyncio.Protocol):
 		self.state = STATE_CLOSE
 		return True
 	
+	def process_client_certificate(self, message):
+		self.crypto.client_cert = self.crypto.load_cert_bytes(bytes(message['cert'], 'ISO-8859-1'))
+		self.crypto.signature = bytes(message['signature'], 'ISO-8859-1')
+
+		client_public_key = self.crypto.client_cert.public_key()
+		# Verify client signature
+		flag = self.crypto.cc_signature_validation(self.crypto.signature,bytes(str(self.client_nonce) + str(self.crypto.auth_nonce), 'ISO-8859-1'),client_public_key)
+		
+		# Verify chain
+		flag1 = self.crypto.validate_cc_chain(self.crypto.client_cert)
+		print(f"Flag :{flag1}")
+
+
+	
 	def process_secure(self):
 		"""
 		Processes a SECURE_X message from the client.
@@ -555,6 +570,10 @@ class ClientHandler(asyncio.Protocol):
 		elif mtype == 'SERVER_AUTH_FAILED':
 			logger.warning("Server AUTH failed.")
 			ret=False
+		elif mtype == 'FILE_REQUEST':
+			ret = self.process_file_request(message)
+		elif mtype == 'AUTH_CERTIFICATE':
+			ret = self.process_client_certificate(message)
 		elif mtype == 'CLOSE':
 			ret = self.process_close(message)
 
