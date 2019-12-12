@@ -56,6 +56,7 @@ class ClientHandler(asyncio.Protocol):
 		self.password = "tq`>_!+^}u,2rr6(-x-@"
 		self.rsa_public_key, self.rsa_private_key = self.crypto.key_pair_gen(self.password, 4096)
 		self.client_nonce = None
+		self.client_public_key = None
 
 		self.registered_users = self.load_users()
 		self.authentication_tries = 0
@@ -238,9 +239,10 @@ class ClientHandler(asyncio.Protocol):
 		"""
 		Here, the server must send a challenge to the client.
 		"""
-		self.state=STATE_CLIENT_AUTH
+		self.state = STATE_CLIENT_AUTH
 		self.client_nonce = base64.b64decode(message['nonce'].encode())
 		self.crypto.auth_nonce = os.urandom(16)
+		self.client_public_key = base64.b64decode(message['public_key'].encode())
 		self._send({'type': 'CHALLENGE_REQUEST', 'nonce': base64.b64encode(self.crypto.auth_nonce).decode()})
 		
 		return True
@@ -280,11 +282,12 @@ class ClientHandler(asyncio.Protocol):
 			self._send({'type': 'AUTH_RESPONSE', 'status': 'DENIED'})
 			return False
 
-		encrypted_password = message['credentials']['encrypted_password']
-		decrypted = self.crypto.rsa_decryption(self.password,base64.b64decode(encrypted_password.encode()),self.crypto.rsa_private_key)
-
+		signed_challenge = message['credentials']['signed_challenge']
 		pw, permissions = self.registered_users[username][0], self.registered_users[username][1]	
-		if str(self.client_nonce) + pw + str(self.crypto.auth_nonce) == decrypted:
+		signature_verification = self.crypto.rsa_signature_verification(base64.b64decode(signed_challenge.encode()), (str(self.client_nonce) + pw + str(self.crypto.auth_nonce)).encode(), self.crypto.load_public_key(self.client_public_key))
+
+		
+		if signature_verification:
 			self._send({'type': 'AUTH_RESPONSE', 'status': 'SUCCESS', 'username': username})
 			self.authenticated_user = [username, permissions]
 		else:
