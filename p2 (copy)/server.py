@@ -56,7 +56,6 @@ class ClientHandler(asyncio.Protocol):
 		self.password = "tq`>_!+^}u,2rr6(-x-@"
 		self.rsa_public_key, self.rsa_private_key = self.crypto.key_pair_gen(self.password, 4096)
 		self.client_nonce = None
-		self.client_public_key = None
 
 		self.registered_users = self.load_users()
 		self.authentication_tries = 0
@@ -239,11 +238,9 @@ class ClientHandler(asyncio.Protocol):
 		"""
 		Here, the server must send a challenge to the client.
 		"""
-		self.state = STATE_CLIENT_AUTH
+		self.state=STATE_CLIENT_AUTH
 		self.client_nonce = base64.b64decode(message['nonce'].encode())
 		self.crypto.auth_nonce = os.urandom(16)
-		print("Ola")
-		self.client_public_key = base64.b64decode(message['public_key'].encode())
 		self._send({'type': 'CHALLENGE_REQUEST', 'nonce': base64.b64encode(self.crypto.auth_nonce).decode()})
 		
 		return True
@@ -267,12 +264,12 @@ class ClientHandler(asyncio.Protocol):
 		self.crypto.server_ca_cert=self.crypto.load_cert("server_roots/Secure_Server_CA.pem")
 		self.crypto.rsa_public_key=self.crypto.server_cert.public_key()
 		self.crypto.rsa_private_key=self.crypto.load_key_from_file("server_cert/server_key.pem")
-		nonce=base64.b64decode(message['nonce'].encode())
+		nonce=bytes(message['nonce'],'ISO-8859-1')
 
 		#Encrypt NONCE received by client
 		self.crypto.signature = self.crypto.rsa_signing(nonce, self.crypto.rsa_private_key)
 
-		message={'type':'SERVER_AUTH_RESPONSE','signature':base64.b64encode(self.crypto.signature).decode(),'server_cert':base64.b64encode(self.crypto.get_certificate_bytes(self.crypto.server_cert)).decode(),'server_roots':base64.b64encode(self.crypto.get_certificate_bytes(self.crypto.server_ca_cert)).decode()}
+		message={'type':'SERVER_AUTH_RESPONSE','signature':str(self.crypto.signature,'ISO-8859-1'),'server_cert':str(self.crypto.get_certificate_bytes(self.crypto.server_cert),'ISO-8859-1'),'server_roots':str(self.crypto.get_certificate_bytes(self.crypto.server_ca_cert),'ISO-8859-1')}
 		self._send(message)
 		return True
 	
@@ -283,12 +280,11 @@ class ClientHandler(asyncio.Protocol):
 			self._send({'type': 'AUTH_RESPONSE', 'status': 'DENIED'})
 			return False
 
-		signed_challenge = message['credentials']['signed_challenge']
-		pw, permissions = self.registered_users[username][0], self.registered_users[username][1]	
-		signature_verification = self.crypto.rsa_signature_verification(base64.b64decode(signed_challenge.encode()), (str(self.client_nonce) + pw + str(self.crypto.auth_nonce)).encode(), self.crypto.load_public_key(self.client_public_key))
+		encrypted_password = message['credentials']['encrypted_password']
+		decrypted = self.crypto.rsa_decryption(self.password,base64.b64decode(encrypted_password.encode()),self.crypto.rsa_private_key)
 
-		
-		if signature_verification:
+		pw, permissions = self.registered_users[username][0], self.registered_users[username][1]	
+		if str(self.client_nonce) + pw + str(self.crypto.auth_nonce) == decrypted:
 			self._send({'type': 'AUTH_RESPONSE', 'status': 'SUCCESS', 'username': username})
 			self.authenticated_user = [username, permissions]
 		else:
@@ -524,32 +520,16 @@ class ClientHandler(asyncio.Protocol):
 		return True
 	
 	def process_client_certificate(self, message):
-		self.crypto.client_cert = self.crypto.load_cert_bytes(base64.b64decode(message['cert'].encode()))
-		self.crypto.signature = base64.b64decode(message['signature'].encode())
-		username=message['credentials']['username']
-
-		if username not in self.registered_users :
-			self._send({'type': 'AUTH_RESPONSE', 'status': 'DENIED'})
-			return False
-		
-		permissions =self.registered_users[username][1]
-		self.authenticated_user = [username, permissions]
+		self.crypto.client_cert = self.crypto.load_cert_bytes(bytes(message['cert'], 'ISO-8859-1'))
+		self.crypto.signature = bytes(message['signature'], 'ISO-8859-1')
 
 		client_public_key = self.crypto.client_cert.public_key()
 		# Verify client signature
-		flag = self.crypto.cc_signature_validation(self.crypto.signature,self.client_nonce+self.crypto.auth_nonce,client_public_key)
+		flag = self.crypto.cc_signature_validation(self.crypto.signature,bytes(str(self.client_nonce) + str(self.crypto.auth_nonce), 'ISO-8859-1'),client_public_key)
 		
 		# Verify chain
 		flag1 = self.crypto.validate_cc_chain(self.crypto.client_cert)
 		print(f"Flag :{flag1}")
-
-		if flag1 and flag :
-			logger.info("Client validated")
-			self._send({'type': 'AUTH_RESPONSE', 'status': 'SUCCESS', 'username': self.authenticated_user[0]})
-			return True
-		else:
-			self._send({'type': 'AUTH_RESPONSE', 'status': 'DENIED'})
-			return False
 
 
 	
@@ -591,8 +571,6 @@ class ClientHandler(asyncio.Protocol):
 			ret = self.process_file_request(message)
 		elif mtype == 'AUTH_CERTIFICATE':
 			ret = self.process_client_certificate(message)
-			
-
 		elif mtype == 'CLOSE':
 			ret = self.process_close(message)
 

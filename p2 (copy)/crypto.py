@@ -285,19 +285,6 @@ class Crypto:
            private_key=serialization.load_pem_private_key(f.read(),password=None,backend=default_backend())
         return private_key
     
-    def load_private_key(self, stream, pw):
-        return serialization.load_pem_private_key(
-            stream,
-            password=pw,
-            backend=default_backend()
-        )
-    
-    def load_public_key(self, stream):
-        return serialization.load_pem_public_key(
-            stream,
-            backend=default_backend()
-        )
-    
     def validate_cert(self,cert):
         today = datetime.now().timestamp()
 
@@ -441,11 +428,12 @@ class Crypto:
             flag4=self.validate_revocation(self.chain[i],self.chain[i+1])
 
             if not flag1 or not flag2 or flag4:
-                return True
-                #return False # TODO CHANGEEEE
+                return False
+
 
             
         return flag and flag1 and flag2
+        
 
     
     def key_pair_gen(self, password, length):
@@ -468,7 +456,6 @@ class Crypto:
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.BestAvailableEncryption(password)
         )
-
         priv_key = base64.b64encode(pem).decode()
 
         public_key = private_key.public_key()
@@ -495,7 +482,6 @@ class Crypto:
         )
 
         return ciphertext
-
 
     def load_cert_revocation_list(self,filename,file_type):
         with open(filename, "rb") as pem_file:
@@ -723,6 +709,8 @@ class Crypto:
         #return self.get_certificate_bytes(cert), signature
 
     def rsa_signing(self, message, private_key):
+    
+
 
         signature = private_key.sign(
             message,
