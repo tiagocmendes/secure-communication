@@ -60,7 +60,7 @@ class ClientProtocol(asyncio.Protocol):
         self.server_public_key = None
         self.nonce = os.urandom(16)
         self.server_nonce = None
-        self.validation_type="CITIZEN_CARD" #Challenge or Citzent card
+        self.validation_type="CHALLENGE" #Challenge or Citzent card
     
     def log_state(self, received):
         states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']
@@ -205,7 +205,7 @@ class ClientProtocol(asyncio.Protocol):
                 self.crypto.auth_nonce=os.urandom(16)
 
                 self.state=STATE_CLIENT_AUTH
-                if self.validation_type=="Challenge":
+                if self.validation_type=="CHALLENGE":
                     message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.crypto.auth_nonce).decode()}
                     secure_message = self.encrypt_payload(message)
                     self._send(secure_message)
@@ -234,9 +234,10 @@ class ClientProtocol(asyncio.Protocol):
         elif mtype == 'FILE_REQUEST_RESPONSE':
             if message['status'] == 'PERMISSION_GRANTED':
                 logger.info('Permission granted to transfer the file.')
-                message = {'type':'NEGOTIATION','algorithms':{'symetric_ciphers':self.symetric_ciphers,'chiper_modes':self.cipher_modes,'digest':self.digest}}
-                self._send(message)
-                self.state = STATE_NEGOTIATION
+                secure_message = self.encrypt_payload({'type': 'OPEN', 'file_name': self.file_name})
+                self._send(secure_message)
+                self.send_mac()
+                self.state = STATE_OPEN
             else:
                 logger.info('Permission denied to transfer the file.')
             return
@@ -360,9 +361,8 @@ class ClientProtocol(asyncio.Protocol):
             return False
 
     def process_authentication(self, message):
-        logger.info('User authenticated with success! Username: ' + message['username'])
 
-        secure_message = self.encrypt_payload({'type': 'OPEN', 'file_name': self.file_name})
+        secure_message = self.encrypt_payload({'type': 'FILE_REQUEST'})
         self._send(secure_message)
         self.send_mac()
         self.state = STATE_OPEN

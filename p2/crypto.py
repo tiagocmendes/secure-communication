@@ -5,6 +5,7 @@ import argparse
 import coloredlogs, logging
 import PyKCS11
 import wget
+import requests
 
 import os
 import getpass
@@ -13,6 +14,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives import serialization as crypto_serialization
 from cryptography.x509 import ocsp
+from cryptography.hazmat.primitives.hashes import SHA1
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import dh
@@ -26,6 +28,7 @@ from cryptography.hazmat.primitives.asymmetric import utils, rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.x509.oid import NameOID
 
+logger = logging.getLogger('root')
 
 
 """
@@ -294,12 +297,21 @@ class Crypto:
         return x509.load_der_x509_certificate(cert_bytes, default_backend())
     
     def load_cert(self,filename):
-        
-        with open(filename, "rb") as pem_file:
-            pem_data = pem_file.read()
-            cert = x509.load_pem_x509_certificate(pem_data, default_backend())
 
-        return cert
+        try:
+            with open(filename, "rb") as pem_file:
+                pem_data = pem_file.read()
+                cert = x509.load_pem_x509_certificate(pem_data, default_backend())
+            return cert
+        except:
+            print("Not PEM.")
+        try:
+            with open(filename, "rb") as pem_file:
+                pem_data = pem_file.read()
+                cert = x509.load_der_x509_certificate(pem_data, default_backend())
+            return cert
+        except:
+            print("Not DER.")
         
     def build_issuers(self,chain, cert):
         chain.append(cert)
@@ -359,50 +371,49 @@ class Crypto:
     
     def validate_cc_chain(self,base_cert):
 
-        path='/etc/ssl/certs/'
+        path='root_certificates/'
 
 
         print(f"Scanning {path}...")
         folder = os.scandir(path)
         
-        invalid = 0
         print(f"Loading root certificates...")
-        for entry in folder:
-            if entry.is_file() and '.pem' in entry.name:
-                cert = self.load_cert(path + "/" + entry.name)
-                if cert is not None:
-                    self.roots[cert.subject.rfc4514_string()] = cert
-                else: 
-                    invalid += 1
-
-        cc_path='cc_certificates'
-
-        print(f"Scanning {cc_path}...")
-        folder = os.scandir(cc_path)
-        
-        invalid = 0
-        print(f"Loading intermediate certificates...")
         for entry in folder:
             if entry.is_file() and '.crt' in entry.name:
                 cert = self.load_cert(path + "/" + entry.name)
                 if cert is not None:
-                    self.intermediate_certs[cert.subject.rfc4514_string()] = cert
-                else: 
-                    invalid += 1
+                    self.roots[cert.subject.rfc4514_string()] = cert
+
+        cc_path='cc_certificates/'
+
+        print(f"Scanning {cc_path}...")
+        folder = os.scandir(cc_path)
+        
+        print(f"Loading intermediate certificates...")
+        for entry in folder:
+            cert = self.load_cert(cc_path + "/" + entry.name)
+            if cert is not None:
+                self.intermediate_certs[cert.subject.rfc4514_string()] = cert
+            
     
-        print(self.intermediate_certs)       
+        print("Intermediate: {self.intermediate_certs}")       
         self.build_issuers(self.chain,base_cert)
 
         print(self.chain)
 
         
-        '''for i,cert in enumerate(self.chain):
+        for i,cert in enumerate(self.chain):
+
+            #Validate date
             flag=self.validate_cert(cert)
-            flag3=self.validate_server_purpose(cert,i)
-            
+
+            #Validate purpose
+            flag3=self.validate_cc_purpose(cert,i)
+
             if not flag or not flag3:
                 return False
-
+        
+        
         for i in range(0,len(self.chain)):
             if i==len(self.chain)-1:
                 break
@@ -413,7 +424,7 @@ class Crypto:
             #Validate common name with issuer
             flag2=self.validate_cert_common_name(self.chain[i],self.chain[i+1])
 
-            #Validate crl
+            #Validate CRL/OCSP
             flag4=self.validate_revocation(self.chain[i],self.chain[i+1])
 
             if not flag1 or not flag2 or flag4:
@@ -421,7 +432,7 @@ class Crypto:
 
 
             
-        return flag and flag1 and flag2'''
+        return flag and flag1 and flag2
         
 
     
@@ -510,6 +521,21 @@ class Crypto:
             else:
                 return False
 
+    def validate_cc_purpose(self,cert,index):
+
+        if index==0:
+            
+            for c in cert.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value:
+                if c.dotted_string=="1.3.6.1.5.5.7.3.2":
+                    flag=True
+                    break
+            return flag
+        else:
+            if cert.extensions.get_extension_for_class(x509.KeyUsage).value.key_cert_sign==True :
+                return True
+            else:
+                return False
+
 
     def validate_revocation(self,cert_to_check,issuer_cert):
         
@@ -518,7 +544,6 @@ class Crypto:
             
             builder = builder.add_certificate(cert_to_check, issuer_cert, SHA1())
             req = builder.build()
-
             for j in cert_to_check.extensions.get_extension_for_class(x509.AuthorityInformationAccess).value:
                 if j.access_method.dotted_string == "1.3.6.1.5.5.7.48.1": 
                     rev_list=None
@@ -527,11 +552,20 @@ class Crypto:
                     der=req.public_bytes(serialization.Encoding.DER)
 
                     ocsp_link=j.access_location.value
-                    r=requests.post(ocsp_link,data=der)
+                    r=requests.post(ocsp_link, headers={'Content-Type': 'application/ocsp-request'},data=der)
 
+                    
                     ocsp_resp = ocsp.load_der_ocsp_response(r.content)
                     print(ocsp_resp.certificate_status)
-        except:
+                    if ocsp_resp.certificate_status== ocsp.OCSPCertStatus.GOOD:
+                        return False
+                    else:
+                        return True
+
+                   
+                                
+        except Exception as e:
+            print(e)
             print("OCSP not available")
         
         try:
@@ -607,38 +641,42 @@ class Crypto:
             return None
 
     def card_signing(self,text):
-        lib ='/usr/local/lib/libpteidpkcs11.so'
+        try:
+            lib ='/usr/local/lib/libpteidpkcs11.so'
+            # TODO VERIFICAR QUANDO CARTAO NAO ESTA LIGADO
+            pkcs11 = PyKCS11.PyKCS11Lib()
+            pkcs11.load(lib)
 
-        pkcs11 = PyKCS11.PyKCS11Lib()
-        pkcs11.load(lib)
+            slots = pkcs11.getSlotList()
 
-        slots = pkcs11.getSlotList()
+            for slot in slots:
+                #print(pkcs11.getTokenInfo(slot))
 
-        for slot in slots:
-            #print(pkcs11.getTokenInfo(slot))
+                all_attr = list(PyKCS11.CKA.keys())
 
-            all_attr = list(PyKCS11.CKA.keys())
+                #Filter attributes
+                all_attr = [e for e in all_attr if isinstance(e, int)]
 
-            #Filter attributes
-            all_attr = [e for e in all_attr if isinstance(e, int)]
+                session = pkcs11.openSession(slot)
+                
+                private_key = session.findObjects([(PyKCS11.CKA_CLASS, PyKCS11.CKO_PRIVATE_KEY),(PyKCS11.CKA_LABEL,'CITIZEN AUTHENTICATION KEY')])[0]
 
-            session = pkcs11.openSession(slot)
-            
-            private_key = session.findObjects([(PyKCS11.CKA_CLASS, PyKCS11.CKO_PRIVATE_KEY),(PyKCS11.CKA_LABEL,'CITIZEN AUTHENTICATION KEY')])[0]
+                mechanism = PyKCS11.Mechanism(PyKCS11.CKM_SHA1_RSA_PKCS, None)
+                
+                signature = bytes(session.sign(private_key, text, mechanism))
 
-            mechanism = PyKCS11.Mechanism(PyKCS11.CKM_SHA1_RSA_PKCS, None)
-            
-            signature = bytes(session.sign(private_key, text, mechanism))
-
-            certificate_obj = session.findObjects([(PyKCS11.CKA_CLASS, PyKCS11.CKO_CERTIFICATE), (PyKCS11.CKA_LABEL, 'CITIZEN AUTHENTICATION CERTIFICATE')])[0]
-            # Get object attributes
-            attr = session.getAttributeValue(certificate_obj, all_attr)
-            # Create dictionary with attributes
-            attr = dict(zip(map(PyKCS11.CKA.get, all_attr), attr))
-            # Load cert
-            cert = x509.load_der_x509_certificate(bytes(attr['CKA_VALUE']), default_backend())
-            #print(f"Public key: {cert.public_key().public_bytes(serialization.Encoding.PEM,serialization.PublicFormat.PKCS1)}")
-        return self.get_certificate_bytes(cert), signature
+                certificate_obj = session.findObjects([(PyKCS11.CKA_CLASS, PyKCS11.CKO_CERTIFICATE), (PyKCS11.CKA_LABEL, 'CITIZEN AUTHENTICATION CERTIFICATE')])[0]
+                # Get object attributes
+                attr = session.getAttributeValue(certificate_obj, all_attr)
+                # Create dictionary with attributes
+                attr = dict(zip(map(PyKCS11.CKA.get, all_attr), attr))
+                # Load cert
+                cert = x509.load_der_x509_certificate(bytes(attr['CKA_VALUE']), default_backend())
+                #print(f"Public key: {cert.public_key().public_bytes(serialization.Encoding.PEM,serialization.PublicFormat.PKCS1)}")
+            return self.get_certificate_bytes(cert), signature
+        except:
+            logger.error("Card not detected.")
+            exit(1)
 
     def card_signature_validation(self,text,signature):
         lib ='/usr/local/lib/libpteidpkcs11.so'

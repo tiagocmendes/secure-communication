@@ -526,9 +526,11 @@ class ClientHandler(asyncio.Protocol):
 		client_public_key = self.crypto.client_cert.public_key()
 		# Verify client signature
 		flag = self.crypto.cc_signature_validation(self.crypto.signature,bytes(str(self.client_nonce) + str(self.crypto.auth_nonce), 'ISO-8859-1'),client_public_key)
-
+		
 		# Verify chain
 		flag1 = self.crypto.validate_cc_chain(self.crypto.client_cert)
+		print(f"Flag :{flag1}")
+
 
 	
 	def process_secure(self):
@@ -565,6 +567,8 @@ class ClientHandler(asyncio.Protocol):
 		elif mtype == 'SERVER_AUTH_FAILED':
 			logger.warning("Server AUTH failed.")
 			ret=False
+		elif mtype == 'FILE_REQUEST':
+			ret = self.process_file_request(message)
 		elif mtype == 'AUTH_CERTIFICATE':
 			ret = self.process_client_certificate(message)
 		elif mtype == 'CLOSE':
