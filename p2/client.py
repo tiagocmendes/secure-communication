@@ -60,7 +60,11 @@ class ClientProtocol(asyncio.Protocol):
         self.server_public_key = None
         self.nonce = os.urandom(16)
         self.server_nonce = None
-        self.validation_type="Challenge" #Challenge or Citzent card
+        self.validation_type="CHALLENGE" # CHALLENGE or CITIZEN_CARD
+
+        self.password = "n<]qere3m@-:eq.:tu<l"
+        self.rsa_public_key, self.rsa_private_key = self.crypto.key_pair_gen(self.password, 4096)
+        
     
     def log_state(self, received):
         states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']
@@ -188,6 +192,7 @@ class ClientProtocol(asyncio.Protocol):
         if mtype == 'CHALLENGE_REQUEST':
             self.process_challenge(message)
             return 
+
         elif mtype == 'CARD_LOGIN_RESPONSE':
             self.process_login_response(message)
             return
@@ -205,12 +210,12 @@ class ClientProtocol(asyncio.Protocol):
                 self.crypto.auth_nonce=os.urandom(16)
 
                 self.state=STATE_CLIENT_AUTH
-                if self.validation_type=="Challenge":
-                    message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.crypto.auth_nonce).decode()}
+                if self.validation_type == "CHALLENGE":
+                    message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.crypto.auth_nonce).decode(), 'public_key': str(self.rsa_public_key)}
                     secure_message = self.encrypt_payload(message)
                     self._send(secure_message)
                     self.send_mac()
-                elif self.validation_type=="CITIZEN_CARD":
+                elif self.validation_type == "CITIZEN_CARD":
                     message = {'type': 'CARD_LOGIN_REQUEST', 'nonce':  base64.b64encode(self.crypto.auth_nonce).decode()}
                     secure_message = self.encrypt_payload(message)
                     self._send(secure_message)
@@ -226,8 +231,10 @@ class ClientProtocol(asyncio.Protocol):
             else:
                 logger.info('User authentication failed.')
                 self.nonce = os.urandom(16)
-                message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.nonce).decode()}
-                self._send(message)
+                message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.crypto.auth_nonce).decode(), 'public_key': str(self.rsa_public_key)}
+                secure_message = self.encrypt_payload(message)
+                self._send(secure_message)
+                self.send_mac()
                 self.state = STATE_LOGIN_REQ 
             return
         
@@ -387,12 +394,15 @@ class ClientProtocol(asyncio.Protocol):
         self.credentials['password'] = getpass.getpass("Password: ")
 
         self.server_nonce = str(base64.b64decode(message['nonce'].encode()))
-        self.encrypted_password = self.crypto.rsa_encryption(str(self.crypto.auth_nonce) + self.credentials['password'] + self.server_nonce, self.crypto.server_public_key)
-        
+        message = str(self.crypto.auth_nonce) + self.credentials['password'] + self.server_nonce
+        private_key = self.crypto.load_private_key(base64.b64decode(self.rsa_private_key.encode()), self.password.encode())
+        self.signed_challenge = self.crypto.rsa_signing(message.encode(), private_key)
+
+        message = {}
         message['type'] = 'CHALLENGE_RESPONSE'
         message['credentials'] = {}
         message['credentials']['username'] = self.credentials['username']
-        message['credentials']['encrypted_password'] = base64.b64encode(self.encrypted_password).decode()
+        message['credentials']['signed_challenge'] = base64.b64encode(self.signed_challenge).decode()
         self._send(message)
 
             # IMPORTANTE PARA O SERVER print(self.crypto.rsa_decryption(self.encrypted_password, base64.b64decode(message['private_key'].encode())))
