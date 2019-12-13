@@ -284,7 +284,7 @@ class ClientProtocol(asyncio.Protocol):
                 secure_message = self.encrypt_payload(message)
                 self._send(secure_message)
                 self.send_mac()
-                self.state = STATE_LOGIN_REQ 
+                self.state = STATE_CLIENT_AUTH 
             return
         
         elif mtype == 'FILE_REQUEST_RESPONSE':
@@ -428,7 +428,7 @@ class ClientProtocol(asyncio.Protocol):
                 secure_message = self.encrypt_payload(message)
                 self._send(secure_message)
                 self.send_mac()
-                self.state = STATE_LOGIN_REQ 
+                self.state = STATE_CLIENT_AUTH 
         
         elif mtype == 'FILE_REQUEST_RESPONSE':
             if message['status'] == 'PERMISSION_GRANTED':
