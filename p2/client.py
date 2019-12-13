@@ -292,26 +292,13 @@ class ClientProtocol(asyncio.Protocol):
                 
             elif self.state==STATE_DH:
 
-                #message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.nonce).decode()}
-
-                #Generate a new NONCE
                 self.crypto.auth_nonce=os.urandom(16)
                 message = {'type': 'SERVER_AUTH_REQUEST', 'nonce':  base64.b64encode(self.crypto.auth_nonce).decode()}
                 secure_message = self.encrypt_payload(message)
-                self._send(secure_message)
-                self.send_mac()
                 self.state = STATE_SERVER_AUTH
-            
-                #self._send(message)
-                #self.state=STATE_DH
-                #self.state = STATE_LOGIN_REQ 
-                #self.state = STATE_SERVER_AUTH    
-                
-                
-                '''secure_message = self.encrypt_payload({'type': 'OPEN', 'file_name': self.file_name})
                 self._send(secure_message)
                 self.send_mac()
-                self.state = STATE_OPEN'''
+            
 
             return
 

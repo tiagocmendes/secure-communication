@@ -570,7 +570,6 @@ class Crypto:
 
                     
                     ocsp_resp = ocsp.load_der_ocsp_response(r.content)
-                    print(ocsp_resp.certificate_status)
                     if ocsp_resp.certificate_status== ocsp.OCSPCertStatus.GOOD:
                         return False
                     else:
@@ -669,10 +668,11 @@ class Crypto:
                         
                         flag1=issuer_cert.serial_number in [l.serial_number for l in rev_list]
 
-                        return flag1 or flag
 
             except:
                 logger.debug("DELTA CRL not available.")
+            return flag1 or flag
+
 
 
         except Exception as e:

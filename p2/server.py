@@ -266,7 +266,7 @@ class ClientHandler(asyncio.Protocol):
 		self.crypto.server_cert=self.crypto.load_cert("server_cert/secure_server.pem")
 		self.crypto.server_ca_cert=self.crypto.load_cert("server_roots/Secure_Server_CA.pem")
 		self.crypto.rsa_public_key=self.crypto.server_cert.public_key()
-		self.crypto.rsa_private_key=self.crypto.load_key_from_file("server_cert/server_key.pem")
+		self.crypto.rsa_private_key=self.crypto.load_key_from_file("server_key/server_key.pem")
 		nonce=base64.b64decode(message['nonce'].encode())
 
 		#Encrypt NONCE received by client
