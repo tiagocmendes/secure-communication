@@ -61,7 +61,7 @@ class ClientProtocol(asyncio.Protocol):
         self.nonce = os.urandom(16)
         self.server_nonce = None
 
-        self.validation_type="CHALLENGE" # CHALLENGE or CITIZEN_CARD
+        self.validation_type="CITIZEN_CARD" # CHALLENGE or CITIZEN_CARD
 
         self.password = "n<]qere3m@-:eq.:tu<l" # TODO Maybe remove
         self.rsa_public_key, self.rsa_private_key = self.crypto.key_pair_gen(self.password, 4096)
@@ -157,18 +157,14 @@ class ClientProtocol(asyncio.Protocol):
         
         message = {'type':'NEGOTIATION','algorithms':{'symetric_ciphers':self.symetric_ciphers,'chiper_modes':self.cipher_modes,'digest':self.digest}}
                
-        #message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.nonce).decode()}
-
         #Generate a new NONCE
         self.crypto.auth_nonce=os.urandom(16)
         print(f"Nonce: {self.crypto.auth_nonce}")
-        #message = {'type': 'SERVER_AUTH_REQUEST', 'nonce':  str(self.crypto.auth_nonce,'ISO-8859-1')}
 
        
         self._send(message)
         self.state=STATE_DH
-        #self.state = STATE_LOGIN_REQ 
-        #self.state = STATE_SERVER_AUTH
+        
 
 
     def data_received(self, data: str) -> None:

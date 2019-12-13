@@ -319,6 +319,7 @@ class ClientHandler(asyncio.Protocol):
 		#Encrypt NONCE received by client
 		self.crypto.signature = self.crypto.rsa_signing(nonce, self.crypto.rsa_private_key)
 
+		logger.info("Sending certificates for validation")
 		message={'type':'SERVER_AUTH_RESPONSE','signature':base64.b64encode(self.crypto.signature).decode(),'server_cert':base64.b64encode(self.crypto.get_certificate_bytes(self.crypto.server_cert)).decode(),'server_roots':base64.b64encode(self.crypto.get_certificate_bytes(self.crypto.server_ca_cert)).decode()}
 		secure_message = self.encrypt_payload(message)
 		self._send(secure_message)

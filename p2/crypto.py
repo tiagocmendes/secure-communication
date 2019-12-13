@@ -331,10 +331,7 @@ class Crypto:
 
         issuer = cert.issuer.rfc4514_string()
         subject = cert.subject.rfc4514_string()
-        print("----")
-        print(f"Issuer : {issuer}")
-        print(f"Subject : {subject}")
-        print("----")
+        
 
         if issuer == subject and subject in self.roots:
             return 
@@ -578,8 +575,7 @@ class Crypto:
                    
                                 
         except Exception as e:
-            print(e)
-            print("OCSP not available")
+            logger.debug("OCSP not available")
         
 
         try:
@@ -588,15 +584,16 @@ class Crypto:
                     rev_list=None
                     #Downloading list
                     file_name=wget.download(b.value)
+                    print()
                     #read revocation list
                     try:
                         rev_list=self.load_cert_revocation_list(file_name,"pem")
                     except Exception as e :
-                        print(e)
+                        logger.debug(e)
                     try:
                         rev_list=self.load_cert_revocation_list(file_name,"der")
                     except:
-                        print("Not der.")
+                        logger.debug("Not der.")
                     if rev_list is None:
                         return False
                     
@@ -611,11 +608,11 @@ class Crypto:
                         try:
                             rev_list=self.load_cert_revocation_list(file_name,"pem")
                         except Exception as e :
-                            print(e)
+                            logger.debug(e)
                         try:
                             rev_list=self.load_cert_revocation_list(file_name,"der")
                         except:
-                            print("Not der.")
+                            logger.debug("Not der.")
                         if rev_list is None:
                             return False
                         
@@ -628,17 +625,19 @@ class Crypto:
                     rev_list=None
                     #Downloading list
                     file_name=wget.download(b.value)
+                    print()
+
 
                     #read revocation list
                     try:
                         rev_list=self.load_cert_revocation_list(file_name,"pem")
                     except Exception as e :
-                        print(e)
+                        logger.debug(e)
                         
                     try:
                         rev_list=self.load_cert_revocation_list(file_name,"der")
                     except:
-                        print("Not der.")
+                        logger.debug("Not der.")
                     if rev_list is None:
                         return False
                     
@@ -653,16 +652,17 @@ class Crypto:
                         #Downloading list
                         file_name=wget.download(b.value)
 
+
                         #read revocation list
                         try:
                             rev_list=self.load_cert_revocation_list(file_name,"pem")
                         except Exception as e :
-                            print(e)
+                            logger.debug(e)
                             
                         try:
                             rev_list=self.load_cert_revocation_list(file_name,"der")
                         except:
-                            print("Not der.")
+                            logger.debug("Not der.")
                         if rev_list is None:
                             return False
                         
@@ -676,7 +676,7 @@ class Crypto:
 
 
         except Exception as e:
-            print("CRL not available")
+            logger.debug("CRL not available")
         
         return True
 
@@ -684,8 +684,6 @@ class Crypto:
     def validate_cert_common_name(self,cert_to_check,issuer_cert):
 
         if (self.get_issuer_common_name(cert_to_check)!=self.get_common_name(issuer_cert)):
-            print(self.get_issuer_common_name(cert_to_check))
-            print(self.get_common_name(issuer_cert))
             return False 
         
         return True
@@ -698,7 +696,6 @@ class Crypto:
             return None
 
     def get_issuer_common_name(self,cert):
-        print(cert.issuer)
         try:
             names = cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)
             return names[0].value
@@ -708,7 +705,6 @@ class Crypto:
     def card_signing(self,text):
         try:
             lib ='/usr/local/lib/libpteidpkcs11.so'
-            # TODO VERIFICAR QUANDO CARTAO NAO ESTA LIGADO
             pkcs11 = PyKCS11.PyKCS11Lib()
             pkcs11.load(lib)
 
