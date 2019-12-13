@@ -582,6 +582,7 @@ class Crypto:
             print(e)
             print("OCSP not available")
         
+
         try:
             for i in cert_to_check.extensions.get_extension_for_class(x509.CRLDistributionPoints).value:
                 for b in i.full_name:
@@ -601,6 +602,27 @@ class Crypto:
                         return False
                     
                     flag=cert_to_check.serial_number in [l.serial_number for l in rev_list]
+            try:
+                for i in cert_to_check.extensions.get_extension_for_class(x509.FreshestCRL).value:
+                    for b in i.full_name:
+                        rev_list=None
+                        #Downloading list
+                        file_name=wget.download(b.value)
+                        #read revocation list
+                        try:
+                            rev_list=self.load_cert_revocation_list(file_name,"pem")
+                        except Exception as e :
+                            print(e)
+                        try:
+                            rev_list=self.load_cert_revocation_list(file_name,"der")
+                        except:
+                            print("Not der.")
+                        if rev_list is None:
+                            return False
+                        
+                        flag=cert_to_check.serial_number in [l.serial_number for l in rev_list]
+            except:
+                logger.debug("DELTA CRL not available.")
 
             for i in issuer_cert.extensions.get_extension_for_class(x509.CRLDistributionPoints).value:
                 for b in i.full_name:
@@ -624,6 +646,35 @@ class Crypto:
                     flag1=issuer_cert.serial_number in [l.serial_number for l in rev_list]
 
                     return flag1 or flag
+            
+            try:
+                for i in issuer_cert.extensions.get_extension_for_class(x509.FreshestCRL).value:
+                    for b in i.full_name:
+                        rev_list=None
+                        #Downloading list
+                        file_name=wget.download(b.value)
+
+                        #read revocation list
+                        try:
+                            rev_list=self.load_cert_revocation_list(file_name,"pem")
+                        except Exception as e :
+                            print(e)
+                            
+                        try:
+                            rev_list=self.load_cert_revocation_list(file_name,"der")
+                        except:
+                            print("Not der.")
+                        if rev_list is None:
+                            return False
+                        
+                        flag1=issuer_cert.serial_number in [l.serial_number for l in rev_list]
+
+                        return flag1 or flag
+
+            except:
+                logger.debug("DELTA CRL not available.")
+
+
         except Exception as e:
             print("CRL not available")
         
