@@ -63,8 +63,7 @@ class ClientProtocol(asyncio.Protocol):
 
         self.validation_type="CITIZEN_CARD" # CHALLENGE or CITIZEN_CARD
 
-        self.password = "n<]qere3m@-:eq.:tu<l" # TODO Maybe remove
-        self.rsa_public_key, self.rsa_private_key = self.crypto.key_pair_gen(self.password, 4096)
+        self.rsa_public_key, self.rsa_private_key = self.crypto.key_pair_gen( 4096)
 
         self.recv_encrypted_data = ''
         self.recv_decrypted_data = []
@@ -159,7 +158,7 @@ class ClientProtocol(asyncio.Protocol):
                
         #Generate a new NONCE
         self.crypto.auth_nonce=os.urandom(16)
-        print(f"Nonce: {self.crypto.auth_nonce}")
+        logger.debug(f"Nonce: {self.crypto.auth_nonce}")
 
        
         self._send(message)
@@ -447,6 +446,10 @@ class ClientProtocol(asyncio.Protocol):
 
 
     def process_server_auth(self, message):
+        """
+		Called when a client receives the server certificates and signature.
+        After that the client performs the necessary validations.
+		"""
         self.crypto.signature = base64.b64decode(message['signature'].encode())
         server_cert_bytes=base64.b64decode(message['server_cert'].encode())
         server_ca_cert_bytes=base64.b64decode(message['server_roots'].encode())
@@ -475,6 +478,9 @@ class ClientProtocol(asyncio.Protocol):
             return False
 
     def process_authentication(self, message):
+        """
+		Called when a client is authenticated to perform access controll.
+		"""
 
         secure_message = self.encrypt_payload({'type': 'FILE_REQUEST'})
         self._send(secure_message)
@@ -482,6 +488,10 @@ class ClientProtocol(asyncio.Protocol):
         self.state = STATE_OPEN
     
     def process_login_response(self, message):
+        """
+		Called when a client is authenticating with citzent card.
+        The client inserts it's username and creates a signature with it's card
+		"""
         self.credentials['username'] = input("Username: ")
 
         self.server_nonce = base64.b64decode(message['nonce'].encode())
@@ -492,12 +502,16 @@ class ClientProtocol(asyncio.Protocol):
         self.send_mac()
     
     def process_challenge(self, message):
+        """
+		Called when a client is authenticating with challenge.
+        The client inserts it's username and password and creates a signature with it's private key 
+		"""
         self.credentials['username'] = input("Username: ")
         self.credentials['password'] = getpass.getpass("Password: ")
 
         self.server_nonce = str(base64.b64decode(message['nonce'].encode()))
         message = str(self.crypto.auth_nonce) + self.credentials['password'] + self.server_nonce
-        private_key = self.crypto.load_private_key(base64.b64decode(self.rsa_private_key.encode()), self.password.encode())
+        private_key = self.crypto.load_private_key(base64.b64decode(self.rsa_private_key.encode()))
         self.signed_challenge = self.crypto.rsa_signing(message.encode(), private_key)
 
         message = {}
@@ -507,7 +521,6 @@ class ClientProtocol(asyncio.Protocol):
         message['credentials']['signed_challenge'] = base64.b64encode(self.signed_challenge).decode()
         self._send(message)
 
-            # IMPORTANTE PARA O SERVER print(self.crypto.rsa_decryption(self.encrypted_password, base64.b64decode(message['private_key'].encode())))
         return 
 
     def process_negotiation_response(self, message: str) -> bool:

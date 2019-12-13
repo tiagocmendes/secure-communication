@@ -277,38 +277,71 @@ class Crypto:
             return ct
         return ct[:-ct[-1]]
     
+    """
+    Called to get the certificate bytes.
+
+    @param cert: certificate
+    """
     def get_certificate_bytes(self,cert):
         return cert.public_bytes(crypto_serialization.Encoding.PEM)
 
+    """
+    Called to load the private key from a file .
+
+    @param filename: filename
+    """
     def load_key_from_file(self,filename):
         with open(filename, "rb") as f:
            private_key=serialization.load_pem_private_key(f.read(),password=None,backend=default_backend())
         return private_key
     
-    def load_private_key(self, stream, pw):
+    """
+    Called to load a private key .
+
+    @param stream: private key bytes
+    """
+    def load_private_key(self, stream):
         return serialization.load_pem_private_key(
             stream,
-            password=pw,
-            backend=default_backend()
+            backend=default_backend(),
+            password=None
+
         )
     
+    """
+    Called to load a public key .
+
+    @param stream: public key bytes
+    """
     def load_public_key(self, stream):
         return serialization.load_pem_public_key(
             stream,
             backend=default_backend()
         )
     
+    """
+    Called to check the time validation on the certificate .
+
+    @param cert: certificate
+    """
     def validate_cert(self,cert):
         today = datetime.now().timestamp()
 
         return cert.not_valid_before.timestamp() <= today <= cert.not_valid_after.timestamp()
 
+    """
+    Called to load certificate bytes in .pem format.
+
+    @param cert_bytes: certificate bytes
+    """
     def load_cert_bytes(self,cert_bytes):
         return x509.load_pem_x509_certificate(cert_bytes, default_backend())
 
-    def load_cert_bytes_der(self,cert_bytes):
-        return x509.load_der_x509_certificate(cert_bytes, default_backend())
-    
+    """
+    Called to load certificate in .pem and .der format from file.
+
+    @param filename: filename
+    """
     def load_cert(self,filename):
 
         try:
@@ -317,15 +350,21 @@ class Crypto:
                 cert = x509.load_pem_x509_certificate(pem_data, default_backend())
             return cert
         except:
-            print("Not PEM.")
+            logger.debug("Not PEM.")
         try:
             with open(filename, "rb") as pem_file:
                 pem_data = pem_file.read()
                 cert = x509.load_der_x509_certificate(pem_data, default_backend())
             return cert
         except:
-            print("Not DER.")
-        
+            logger.debug("Not DER.")
+
+    """
+    Called to build certificate chain
+
+    @param chain: list with certifcate chain
+    @param cert:certificate
+    """   
     def build_issuers(self,chain, cert):
         chain.append(cert)
 
@@ -344,7 +383,12 @@ class Crypto:
         
         return
 
-    
+    """
+    Called to validate the chain of certificates from the server.
+
+    @param base_cert: server certificate
+    @param root_cert: root server certificate
+    """
     def validate_server_chain(self,base_cert, root_cert):
     
         self.roots[root_cert.subject.rfc4514_string()] = root_cert
@@ -379,15 +423,18 @@ class Crypto:
             
         return flag and flag1 and flag2
     
+    """
+    Called to validate the chain of certificates from the cc.
+
+    @param base_cert: cc certificate
+    """
     def validate_cc_chain(self,base_cert):
 
         path='root_certificates/'
 
 
-        print(f"Scanning {path}...")
         folder = os.scandir(path)
         
-        print(f"Loading root certificates...")
         for entry in folder:
             if entry.is_file() and '.crt' in entry.name:
                 cert = self.load_cert(path + "/" + entry.name)
@@ -396,20 +443,16 @@ class Crypto:
 
         cc_path='cc_certificates/'
 
-        print(f"Scanning {cc_path}...")
         folder = os.scandir(cc_path)
         
-        print(f"Loading intermediate certificates...")
         for entry in folder:
             cert = self.load_cert(cc_path + "/" + entry.name)
             if cert is not None:
                 self.intermediate_certs[cert.subject.rfc4514_string()] = cert
             
     
-        print("Intermediate: {self.intermediate_certs}")       
         self.build_issuers(self.chain,base_cert)
 
-        print(self.chain)
 
         
         for i,cert in enumerate(self.chain):
@@ -445,14 +488,18 @@ class Crypto:
         return flag and flag1 and flag2
 
     
-    def key_pair_gen(self, password, length):
+    """
+    Called to generate a public/private key pair.
+
+    @param length: key length
+    """
+    def key_pair_gen(self, length):
         valid_lengths = [1024, 2048, 3072, 4096]
 
         if length not in valid_lengths:
-            print("ERROR - Not a valid length!")
+            logger.debug("ERROR - Not a valid length!")
             return 
         
-        password = password.encode()
 
         private_key = rsa.generate_private_key(
             public_exponent=65537, 
@@ -463,7 +510,7 @@ class Crypto:
         pem = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.BestAvailableEncryption(password)
+            encryption_algorithm=serialization.NoEncryption()
         )
 
         priv_key = base64.b64encode(pem).decode()
@@ -476,24 +523,13 @@ class Crypto:
         pub_key = base64.b64encode(pem).decode()
 
         return (pub_key, priv_key)
-    
-    def rsa_encryption(self, message, public_key):
-    
-        message = message.encode('utf-8')
 
-       
-        ciphertext = public_key.encrypt(
-            message,
-            padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None
-            )
-        )
+    """
+    Called to load a crl revocation list.
 
-        return ciphertext
-
-
+    @param filename: filename
+    @param file_type: file_type
+    """
     def load_cert_revocation_list(self,filename,file_type):
         with open(filename, "rb") as pem_file:
             pem_data = pem_file.read()
@@ -504,6 +540,12 @@ class Crypto:
 
         return cert
 
+    """
+    Called to validate a certificate signature
+
+    @param cert_to_check: certificate
+    @param issuer_cert: issuer certificate
+    """
     def validate_cert_signature(self,cert_to_check,issuer_cert):
 
         cert_to_check_signature=cert_to_check.signature
@@ -512,11 +554,17 @@ class Crypto:
         try:
             issuer_public_key.verify(cert_to_check_signature,cert_to_check.tbs_certificate_bytes,padding.PKCS1v15(),cert_to_check.signature_hash_algorithm)
         except:
-            print("Failed to verify signature.")
+            logger.debug("Failed to verify signature.")
             return False
     
         return True
 
+    """
+    Called to validate a certificate purpose. The first certificate validated will have a different purpose from the rest of the chain
+
+    @param cert: certificate
+    @param index: index of the certificate we are validating
+    """
     def validate_server_purpose(self,cert,index):
 
         if index==0:
@@ -531,23 +579,38 @@ class Crypto:
                 return True
             else:
                 return False
+    """
+    Called to validate a certificate purpose. The first certificate validated will have a different purpose from the rest of the chain
 
+    @param cert: certificate
+    @param index: index of the certificate we are validating
+    """
     def validate_cc_purpose(self,cert,index):
 
-        if index==0:
-            
-            for c in cert.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value:
-                if c.dotted_string=="1.3.6.1.5.5.7.3.2":
-                    flag=True
-                    break
-            return flag
-        else:
-            if cert.extensions.get_extension_for_class(x509.KeyUsage).value.key_cert_sign==True :
-                return True
+        try:
+            if index==0:
+                
+                for c in cert.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value:
+                    if c.dotted_string=="1.3.6.1.5.5.7.3.2":
+                        flag=True
+                        break
+                return flag
             else:
-                return False
+                if cert.extensions.get_extension_for_class(x509.KeyUsage).value.key_cert_sign==True :
+                    return True
+                else:
+                    return False
+        except:
+            logger.error("Could not authenticate with cc.")
+            exit(1)
 
 
+    """
+    Called to validate the revocation of a certificate through CRL, DELTA CRL and OCSP
+
+    @param cert_to_check: certificate
+    @param issuer_cert: issuer certificate
+    """
     def validate_revocation(self,cert_to_check,issuer_cert):
         
         try:
@@ -680,14 +743,23 @@ class Crypto:
         
         return True
 
+    """
+    Called to validate the certificate common name.
 
+    @param cert_to_check: certificate
+    @param issuer_cert: issuer certificate
+    """
     def validate_cert_common_name(self,cert_to_check,issuer_cert):
 
         if (self.get_issuer_common_name(cert_to_check)!=self.get_common_name(issuer_cert)):
             return False 
         
         return True
+    """
+    Returns the certificate common name.
 
+    @param cert_to_check: certificate
+    """
     def get_common_name(self,cert):
         try:
             names = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
@@ -695,6 +767,11 @@ class Crypto:
         except x509.ExtensionNotFound:
             return None
 
+    """
+    Returns the certificate issuer common name.
+
+    @param cert: certificate
+    """
     def get_issuer_common_name(self,cert):
         try:
             names = cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)
@@ -702,6 +779,11 @@ class Crypto:
         except x509.ExtensionNotFound:
             return None
 
+    """
+    Returns the signature created with the cc.
+
+    @param text: text to sign
+    """
     def card_signing(self,text):
         try:
             lib ='/usr/local/lib/libpteidpkcs11.so'
@@ -711,8 +793,6 @@ class Crypto:
             slots = pkcs11.getSlotList()
 
             for slot in slots:
-                #print(pkcs11.getTokenInfo(slot))
-
                 all_attr = list(PyKCS11.CKA.keys())
 
                 #Filter attributes
@@ -733,42 +813,18 @@ class Crypto:
                 attr = dict(zip(map(PyKCS11.CKA.get, all_attr), attr))
                 # Load cert
                 cert = x509.load_der_x509_certificate(bytes(attr['CKA_VALUE']), default_backend())
-                #print(f"Public key: {cert.public_key().public_bytes(serialization.Encoding.PEM,serialization.PublicFormat.PKCS1)}")
             return self.get_certificate_bytes(cert), signature
         except:
             logger.error("Card not detected.")
             exit(1)
 
-    def card_signature_validation(self,text,signature):
-        lib ='/usr/local/lib/libpteidpkcs11.so'
+    
+    """
+    Returns the signature created with the private key.
 
-        pkcs11 = PyKCS11.PyKCS11Lib()
-        pkcs11.load(lib)
-
-        slots = pkcs11.getSlotList()
-
-        for slot in slots:
-            #print(pkcs11.getTokenInfo(slot))
-
-            all_attr = list(PyKCS11.CKA.keys())
-
-            #Filter attributes
-            all_attr = [e for e in all_attr if isinstance(e, int)]
-
-            session = pkcs11.openSession(slot)
-            
-            public_key = session.findObjects([(PyKCS11.CKA_CLASS, PyKCS11.CKO_PUBLIC_KEY),(PyKCS11.CKA_LABEL,'CITIZEN AUTHENTICATION KEY')])[0]
-            print(public_key)
-
-            mechanism = PyKCS11.Mechanism(PyKCS11.CKM_SHA1_RSA_PKCS, None)
-            
-
-            result = session.verify(public_key,text,signature,mechanism)
-
-            print(f"Verify: {result}")
-            
-        #return self.get_certificate_bytes(cert), signature
-
+    @param message: message to sign
+    @param private_key: private_key to sign message
+    """
     def rsa_signing(self, message, private_key):
 
         signature = private_key.sign(
@@ -782,7 +838,13 @@ class Crypto:
 
         return signature
 
+    """
+    Validates the signature created with the private key.
 
+    @param signature: signature
+    @param message: message to sign
+    @param public: public key to verify message
+    """
     def rsa_signature_verification (self,signature, message, public_key):
         try:
             public_key.verify(
@@ -795,11 +857,18 @@ class Crypto:
                 hashes.SHA256()
             )
         except Exception as e:
-            print("Server signature validation failed!")
+            logger.debug("Server signature validation failed!")
             return False
         
         return True
     
+    """
+    Validates the signature created with the cc.
+
+    @param signature: signature
+    @param message: message to sign
+    @param public: cc public key to verify message
+    """
     def cc_signature_validation (self,signature, message, public_key):
         
         try:
@@ -810,7 +879,7 @@ class Crypto:
                 hashes.SHA1()
             )
         except Exception as e:
-            print("Server signature validation failed!")
+            logger.debug("Server signature validation failed!")
             return False
         
         return True
@@ -818,17 +887,4 @@ class Crypto:
 
         #return signature
 
-    def rsa_decryption(self, password, ciphertext, private_key):
-        
-       
-        
-        plaintext = private_key.decrypt(
-            ciphertext,
-            padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None
-            )
-        )
-
-        return plaintext.decode()
+   

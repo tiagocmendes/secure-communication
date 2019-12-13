@@ -52,8 +52,6 @@ class ClientHandler(asyncio.Protocol):
 		self.encrypted_data = ''
 		self.decrypted_data = []
 
-		self.password = "tq`>_!+^}u,2rr6(-x-@"
-		self.rsa_public_key, self.rsa_private_key = self.crypto.key_pair_gen(self.password, 4096)
 		self.client_nonce = None
 		self.client_public_key = None
 
@@ -513,7 +511,7 @@ class ClientHandler(asyncio.Protocol):
 				return False
 
 		try:
-			self.file = open(file_path, "wb") #TODO append bytes
+			self.file = open(file_path, "wb") 
 			logger.info("File open")
 		except Exception:
 			logger.exception("Unable to open file")
@@ -617,9 +615,12 @@ class ClientHandler(asyncio.Protocol):
 
 		# Verify client signature
 		flag = self.crypto.cc_signature_validation(self.crypto.signature,self.client_nonce+self.crypto.auth_nonce,client_public_key)
-		
+		logger.info(f'CC signature validation: {flag}')
+
 		# Verify chain
 		flag1 = self.crypto.validate_cc_chain(self.crypto.client_cert)
+		logger.info(f'CC certificate chain validation: {flag1}')
+
 
 		if flag1 and flag:
 			logger.info("Client validated")
