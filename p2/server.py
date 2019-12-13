@@ -62,6 +62,8 @@ class ClientHandler(asyncio.Protocol):
 		self.authentication_tries = 0
 		self.authenticated_user = None
 
+		self.sent_encrypted_data = ''
+
 
 	def load_users(self):
 		with open('./server_db/users.csv', 'r') as f:
@@ -82,6 +84,49 @@ class ClientHandler(asyncio.Protocol):
 		logger.info("------------")
 		logger.info("State: {}".format(states[self.state]))
 		logger.info("Received: {}".format(received))
+	
+	def encrypt_payload(self, message: dict) -> None:
+		"""
+        Called when a secure message will be sent, in order to encrypt its payload.
+
+        @param message: JSON message of type OPEN, DATA or CLOSE
+        """
+		secure_message = {'type': 'SECURE_X', 'payload': None}
+		payload = json.dumps(message).encode()
+		if self.crypto.cipher_mode=='GCM':
+			criptogram = self.crypto.file_encryption(payload,b"HELLO")
+		else:
+			criptogram = self.crypto.file_encryption(payload)
+		secure_message['payload'] = base64.b64encode(criptogram).decode()
+		self.sent_encrypted_data += secure_message['payload']
+		
+		return secure_message
+
+	def send_mac(self) -> None:
+		"""
+        Called when a secure message is sent and a MAC is necessary to check message authenticity.
+        """
+		
+		self.crypto.mac_gen(base64.b64decode(self.sent_encrypted_data))
+		#logger.debug("My MAC: {}".format(self.crypto.mac))
+		if self.crypto.iv is None:
+			iv=''
+		else:
+			iv=base64.b64encode(self.crypto.iv).decode()
+		
+		if self.crypto.gcm_tag is None:
+			tag=''
+		else:
+			tag=base64.b64encode(self.crypto.gcm_tag).decode()
+		
+		if self.crypto.nonce is None:
+			nonce=''
+		else:
+			nonce=base64.b64encode(self.crypto.nonce).decode()
+		
+		message = {'type': 'MAC', 'data': base64.b64encode(self.crypto.mac).decode(), 'iv':iv,'tag':tag,'nonce':nonce}
+		self._send(message)
+		self.sent_encrypted_data = ''
 
 	def connection_made(self, transport) -> None:
 		"""
@@ -96,8 +141,6 @@ class ClientHandler(asyncio.Protocol):
 		self.transport = transport
 		self.state = STATE_CONNECT
 		
-
-
 	def data_received(self, data: bytes) -> None:
 		"""
         Called when data is received from the client.
@@ -242,9 +285,11 @@ class ClientHandler(asyncio.Protocol):
 		self.state = STATE_CLIENT_AUTH
 		self.client_nonce = base64.b64decode(message['nonce'].encode())
 		self.crypto.auth_nonce = os.urandom(16)
-		print("Ola")
 		self.client_public_key = base64.b64decode(message['public_key'].encode())
-		self._send({'type': 'CHALLENGE_REQUEST', 'nonce': base64.b64encode(self.crypto.auth_nonce).decode()})
+		message = {'type': 'CHALLENGE_REQUEST', 'nonce': base64.b64encode(self.crypto.auth_nonce).decode()}
+		secure_message = self.encrypt_payload(message)
+		self._send(secure_message)
+		self.send_mac()
 		
 		return True
 
@@ -255,8 +300,10 @@ class ClientHandler(asyncio.Protocol):
 		self.state=STATE_CLIENT_AUTH
 		self.client_nonce = base64.b64decode(message['nonce'].encode())
 		self.crypto.auth_nonce = os.urandom(16)
-		self._send({'type': 'CARD_LOGIN_RESPONSE', 'nonce': base64.b64encode(self.crypto.auth_nonce).decode()})
-		
+		message = {'type': 'CARD_LOGIN_RESPONSE', 'nonce': base64.b64encode(self.crypto.auth_nonce).decode()}
+		secure_message = self.encrypt_payload(message)
+		self._send(secure_message)
+		self.send_mac()
 		return True
 
 	def process_server_auth(self, message):
@@ -273,14 +320,19 @@ class ClientHandler(asyncio.Protocol):
 		self.crypto.signature = self.crypto.rsa_signing(nonce, self.crypto.rsa_private_key)
 
 		message={'type':'SERVER_AUTH_RESPONSE','signature':base64.b64encode(self.crypto.signature).decode(),'server_cert':base64.b64encode(self.crypto.get_certificate_bytes(self.crypto.server_cert)).decode(),'server_roots':base64.b64encode(self.crypto.get_certificate_bytes(self.crypto.server_ca_cert)).decode()}
-		self._send(message)
+		secure_message = self.encrypt_payload(message)
+		self._send(secure_message)
+		self.send_mac()
 		return True
 	
 	def process_challenge_response(self, message):
 		username = message['credentials']['username']
 		
 		if username not in self.registered_users or 'A1' not in self.registered_users[username][1]:
-			self._send({'type': 'AUTH_RESPONSE', 'status': 'DENIED'})
+			message = {'type': 'AUTH_RESPONSE', 'status': 'DENIED'}
+			secure_message = self.encrypt_payload(message)
+			self._send(secure_message)
+			self.send_mac()
 			return False
 
 		signed_challenge = message['credentials']['signed_challenge']
@@ -289,7 +341,10 @@ class ClientHandler(asyncio.Protocol):
 
 		
 		if signature_verification:
-			self._send({'type': 'AUTH_RESPONSE', 'status': 'SUCCESS', 'username': username})
+			message = {'type': 'AUTH_RESPONSE', 'status': 'SUCCESS', 'username': username}
+			secure_message = self.encrypt_payload(message)
+			self._send(secure_message)
+			self.send_mac()
 			self.authenticated_user = [username, permissions]
 		else:
 			self.authentication_tries += 1
@@ -297,10 +352,16 @@ class ClientHandler(asyncio.Protocol):
 				# remove authentication permission
 				self.registered_users[username][1] = self.registered_users[username][1].replace('1', '0')
 				self.update_users()
-				self._send({'type': 'AUTH_RESPONSE', 'status': 'DENIED'})
+				message = {'type': 'AUTH_RESPONSE', 'status': 'DENIED'}
+				secure_message = self.encrypt_payload(message)
+				self._send(secure_message)
+				self.send_mac()
 				return False
 			
-			self._send({'type': 'AUTH_RESPONSE', 'status': 'FAILED'})
+			message = {'type': 'AUTH_RESPONSE', 'status': 'FAILED'}
+			secure_message = self.encrypt_payload(message)
+			self._send(secure_message)
+			self.send_mac()
 			return True
 		
 		return True
@@ -308,9 +369,15 @@ class ClientHandler(asyncio.Protocol):
 	def process_file_request(self, message):
 
 		if 'T1' in self.authenticated_user[1]:
-			self._send({'type': 'FILE_REQUEST_RESPONSE', 'status': 'PERMISSION_GRANTED'})
+			message = {'type': 'FILE_REQUEST_RESPONSE', 'status': 'PERMISSION_GRANTED'}
+			secure_message = self.encrypt_payload(message)
+			self._send(secure_message)
+			self.send_mac()
 		else:
-			self._send({'type': 'FILE_REQUEST_RESPONSE', 'status': 'PERMISSION_DENIED'})
+			message = {'type': 'FILE_REQUEST_RESPONSE', 'status': 'PERMISSION_DENIED'}
+			secure_message = self.encrypt_payload(message)
+			self._send(secure_message)
+			self.send_mac()
 			return False
 
 		return True
@@ -529,7 +596,10 @@ class ClientHandler(asyncio.Protocol):
 		username=message['credentials']['username']
 
 		if username not in self.registered_users :
-			self._send({'type': 'AUTH_RESPONSE', 'status': 'DENIED'})
+			message = {'type': 'AUTH_RESPONSE', 'status': 'DENIED'}
+			secure_message = self.encrypt_payload(message)
+			self._send(secure_message)
+			self.send_mac()
 			return False
 		
 		permissions =self.registered_users[username][1]
@@ -545,10 +615,16 @@ class ClientHandler(asyncio.Protocol):
 
 		if flag1 and flag :
 			logger.info("Client validated")
-			self._send({'type': 'AUTH_RESPONSE', 'status': 'SUCCESS', 'username': self.authenticated_user[0]})
+			message = {'type': 'AUTH_RESPONSE', 'status': 'SUCCESS', 'username': self.authenticated_user[0]}
+			secure_message = self.encrypt_payload(message)
+			self._send(secure_message)
+			self.send_mac()
 			return True
 		else:
-			self._send({'type': 'AUTH_RESPONSE', 'status': 'DENIED'})
+			message = {'type': 'AUTH_RESPONSE', 'status': 'DENIED'}
+			secure_message = self.encrypt_payload(message)
+			self._send(secure_message)
+			self.send_mac()
 			return False
 
 
