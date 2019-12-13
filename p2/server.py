@@ -15,21 +15,20 @@ logger = logging.getLogger('root')
 STATE_CONNECT = 0
 STATE_OPEN = 1
 STATE_DATA = 2
-STATE_CLOSE= 3
-STATE_KEY_ROTATION=4
-STATE_NEGOTIATION=5
+STATE_CLOSE = 3
+STATE_KEY_ROTATION = 4
+STATE_NEGOTIATION = 5
 STATE_DH = 6
 
-STATE_SERVER_AUTH=7
-STATE_CLIENT_AUTH=8
+STATE_SERVER_AUTH = 7
+STATE_CLIENT_AUTH = 8
 
-#GLOBAL
 storage_dir = 'files'
 
 class ClientHandler(asyncio.Protocol):
 	def __init__(self, signal):
 		"""
-		Default constructor
+		Default constructor.
 		"""
 		self.signal = signal
 		self.state = 0
@@ -38,16 +37,16 @@ class ClientHandler(asyncio.Protocol):
 		self.file_path = None
 		self.storage_dir = storage_dir
 		self.last_pos=0
-		self.new_key=False
+		self.new_key = False
 		self.buffer = ''
 		self.peername = ''
 
-		self.symetric_ciphers=['ChaCha20','AES','3DES']
-		self.cipher_modes=['CBC','ECB','GCM']
-		self.digest=['SHA384','SHA256','SHA512','MD5','BLAKE2']
-		self.choosen_cipher=None
-		self.choosen_mode=None
-		self.choosen_digest=None
+		self.symetric_ciphers = ['ChaCha20','AES','3DES']
+		self.cipher_modes = ['CBC','ECB','GCM']
+		self.digest = ['SHA384','SHA256','SHA512','MD5','BLAKE2']
+		self.choosen_cipher = None
+		self.choosen_mode = None
+		self.choosen_digest = None
 		self.crypto = Crypto(self.choosen_cipher, self.choosen_mode, self.choosen_digest)
 
 		self.encrypted_data = ''
@@ -66,31 +65,34 @@ class ClientHandler(asyncio.Protocol):
 
 
 	def load_users(self):
+		"""
+		Called to load a list of usernames and their respective passwords and permissions. 
+		"""
+
 		with open('./server_db/users.csv', 'r') as f:
 			f.readline() # ignore header
 			users = {user.replace("\n", "").split("\t")[0]:user.replace("\n", "").split("\t")[1:] for user in f}
-			f.close()
 			return users
 	
 	def update_users(self):
+		"""
+		Called to update, in persistence, the users registered in the server.
+		Most of the times, this method will be called when a user has 3 incorrect login tries.
+		"""
+
 		with open('./server_db/users.csv', 'w') as f:
 			f.write("Username\tPassword\tPermissions\n")
 			for user in self.registered_users:
 				f.write(f"{user}\t{self.registered_users[user][0]}\t{self.registered_users[user][1]}\n")
-			f.close()
 
-	def log_state(self, received):
-		states = ['CONNECT', 'OPEN', 'DATA', 'CLOSE', 'KEY_ROTATION', 'NEGOTIATION', 'DIFFIE HELLMAN']
-		logger.info("------------")
-		logger.info("State: {}".format(states[self.state]))
-		logger.info("Received: {}".format(received))
-	
+
 	def encrypt_payload(self, message: dict) -> None:
 		"""
         Called when a secure message will be sent, in order to encrypt its payload.
 
         @param message: JSON message of type OPEN, DATA or CLOSE
         """
+
 		secure_message = {'type': 'SECURE_X', 'payload': None}
 		payload = json.dumps(message).encode()
 		if self.crypto.cipher_mode=='GCM':
@@ -108,9 +110,8 @@ class ClientHandler(asyncio.Protocol):
         """
 		
 		self.crypto.mac_gen(base64.b64decode(self.sent_encrypted_data))
-		#logger.debug("My MAC: {}".format(self.crypto.mac))
 		if self.crypto.iv is None:
-			iv=''
+			iv = ''
 		else:
 			iv=base64.b64encode(self.crypto.iv).decode()
 		
@@ -178,7 +179,6 @@ class ClientHandler(asyncio.Protocol):
 		:param frame: The JSON object to process
 		:return:
 		"""
-		#logger.debug("Frame: {}".format(frame))
 
 		try:
 			message = json.loads(frame)
@@ -188,11 +188,10 @@ class ClientHandler(asyncio.Protocol):
 			return
 
 		mtype = message.get('type', "").upper()
-		error=None
-		logger.info(mtype)
-		#self.log_state(mtype)
+		error = None
+		logger.info("Received: {}".format(mtype))
+
 		if mtype == 'OPEN':
-			print(self.state)
 			if self.state == STATE_DH: # Check if state equal DH
 				ret = self.process_open(message)
 			else:
@@ -200,14 +199,13 @@ class ClientHandler(asyncio.Protocol):
 				self.state = STATE_OPEN
 				ret=True
 
-		elif mtype == 'LOGIN_REQUEST':
+		if mtype == 'LOGIN_REQUEST':
 			ret = self.process_login_request(message)
 
 		elif mtype == 'SERVER_AUTH_REQUEST':
 			ret = self.process_server_auth(message)
 			self.state=STATE_SERVER_AUTH
 
-		
 		elif mtype == 'CHALLENGE_RESPONSE':
 			ret = self.process_challenge_response(message)
 		
@@ -280,7 +278,8 @@ class ClientHandler(asyncio.Protocol):
 
 	def process_login_request(self, message):
 		"""
-		Here, the server must send a challenge to the client.
+		Called when a client attempts to authentication with a challenge-response mechanism.
+		The server receives the request and sends back a challenge.
 		"""
 		self.state = STATE_CLIENT_AUTH
 		self.client_nonce = base64.b64decode(message['nonce'].encode())
@@ -295,9 +294,10 @@ class ClientHandler(asyncio.Protocol):
 
 	def process_card_login_request(self, message):
 		"""
-		Here, the server must send a challenge to the client.
+		Called when a client sends an authentication request with Citizen Cardship.
+		The server receives the request and sends back a challenge.
 		"""
-		self.state=STATE_CLIENT_AUTH
+		self.state = STATE_CLIENT_AUTH
 		self.client_nonce = base64.b64decode(message['nonce'].encode())
 		self.crypto.auth_nonce = os.urandom(16)
 		message = {'type': 'CARD_LOGIN_RESPONSE', 'nonce': base64.b64encode(self.crypto.auth_nonce).decode()}
@@ -308,7 +308,7 @@ class ClientHandler(asyncio.Protocol):
 
 	def process_server_auth(self, message):
 		"""
-		Here, the server must send a challenge to the client.
+		Called when a client attempts to verify server authenticity.
 		"""
 		self.crypto.server_cert=self.crypto.load_cert("server_cert/secure_server.pem")
 		self.crypto.server_ca_cert=self.crypto.load_cert("server_roots/Secure_Server_CA.pem")
@@ -316,7 +316,7 @@ class ClientHandler(asyncio.Protocol):
 		self.crypto.rsa_private_key=self.crypto.load_key_from_file("server_key/server_key.pem")
 		nonce=base64.b64decode(message['nonce'].encode())
 
-		#Encrypt NONCE received by client
+		# Encrypt NONCE received by client
 		self.crypto.signature = self.crypto.rsa_signing(nonce, self.crypto.rsa_private_key)
 
 		logger.info("Sending certificates for validation")
@@ -327,6 +327,11 @@ class ClientHandler(asyncio.Protocol):
 		return True
 	
 	def process_challenge_response(self, message):
+		"""
+		Called when a client requests a challenge-response authentication to server.
+		The server checks if the client is registered in persistence.
+		Then, it verifies the signed challenge.	
+		"""
 		username = message['credentials']['username']
 		
 		if username not in self.registered_users or 'A1' not in self.registered_users[username][1]:
@@ -340,13 +345,13 @@ class ClientHandler(asyncio.Protocol):
 		pw, permissions = self.registered_users[username][0], self.registered_users[username][1]	
 		signature_verification = self.crypto.rsa_signature_verification(base64.b64decode(signed_challenge.encode()), (str(self.client_nonce) + pw + str(self.crypto.auth_nonce)).encode(), self.crypto.load_public_key(self.client_public_key))
 
-		
 		if signature_verification:
 			message = {'type': 'AUTH_RESPONSE', 'status': 'SUCCESS', 'username': username}
 			secure_message = self.encrypt_payload(message)
 			self._send(secure_message)
 			self.send_mac()
 			self.authenticated_user = [username, permissions]
+
 		else:
 			self.authentication_tries += 1
 			if self.authentication_tries == 3:
@@ -368,6 +373,11 @@ class ClientHandler(asyncio.Protocol):
 		return True
 	
 	def process_file_request(self, message):
+		"""
+		Called when a client asks permission to transfer a file. 
+		The server checks if the claimant has permission to do the requested operation or not and
+		sends back a message to the client with permission granted or denied.
+		"""
 
 		if 'T1' in self.authenticated_user[1]:
 			message = {'type': 'FILE_REQUEST_RESPONSE', 'status': 'PERMISSION_GRANTED'}
@@ -400,7 +410,7 @@ class ClientHandler(asyncio.Protocol):
 		logger.debug("Server mac: {}".format(self.crypto.mac))
 
 		if client_mac == self.crypto.mac:
-			logger.info("Integrity controll: Success")
+			logger.info("Integrity control: Success")
 			return (True, None)
 		else:
 			return (False, 'Integrity control failed.')
@@ -458,15 +468,11 @@ class ClientHandler(asyncio.Protocol):
 			if digest in message['algorithms']['digest']:
 				choosen_digest = digest
 				break
-		print(f"Teste: {choosen_chipher} {choosen_mode} {choosen_digest}")
-		if choosen_chipher is not None and choosen_mode is not None and choosen_digest is not None:
-			# self.choosen_cipher=choosen_chipher
-			# self.choosen_mode=choosen_mode
-			# self.choosen_digest=choosen_digest
 
-			self.crypto.symmetric_cipher=choosen_chipher
-			self.crypto.cipher_mode=choosen_mode
-			self.crypto.digest=choosen_digest
+		if choosen_chipher is not None and choosen_mode is not None and choosen_digest is not None:
+			self.crypto.symmetric_cipher = choosen_chipher
+			self.crypto.cipher_mode = choosen_mode
+			self.crypto.digest = choosen_digest
 			
 			flag = True
 		else:
@@ -477,7 +483,6 @@ class ClientHandler(asyncio.Protocol):
 			self._send({'type': 'NEGOTIATION_RESPONSE','chosen_algorithms':{'symetric_cipher':self.crypto.symmetric_cipher,'chiper_mode':self.crypto.cipher_mode,'digest':self.crypto.digest}})
 			return (True,None)
 		logger.debug("Choices {} {} {}".format(choosen_chipher,choosen_mode,choosen_digest))
-
 
 	def process_open(self, message: str) -> bool:
 		"""
@@ -521,7 +526,6 @@ class ClientHandler(asyncio.Protocol):
 		self.state = STATE_OPEN
 		return True
 
-
 	def process_data(self, message: str) -> bool:
 		"""
 		Processes a DATA message from the client
@@ -558,18 +562,17 @@ class ClientHandler(asyncio.Protocol):
 		try:
 			logger.debug("Writing data: {}".format(bdata))
 			if self.new_key:
-				self.new_key=False
+				self.new_key = False
 				self.file.seek(self.last_pos)
-				self.last_pos=0
+				self.last_pos = 0
 			self.file.write(bdata)
-			self.last_pos=self.file.tell()
+			self.last_pos = self.file.tell()
 			self.file.flush()
 		except:
 			logger.exception("Could not write to file")
 			return False
 
 		return True
-
 
 	def process_close(self, message: str) -> bool:
 		"""
@@ -592,9 +595,13 @@ class ClientHandler(asyncio.Protocol):
 		return True
 	
 	def process_client_certificate(self, message):
+		"""
+		Called when a client sends his Citizen Cardship certificate to the server in order to authenticate itself.
+		The server receives and validates the certificate and also a signature.
+		"""
 		self.crypto.client_cert = self.crypto.load_cert_bytes(base64.b64decode(message['cert'].encode()))
 		self.crypto.signature = base64.b64decode(message['signature'].encode())
-		username=message['credentials']['username']
+		username = message['credentials']['username']
 
 		if username not in self.registered_users :
 			message = {'type': 'AUTH_RESPONSE', 'status': 'DENIED'}
@@ -603,18 +610,18 @@ class ClientHandler(asyncio.Protocol):
 			self.send_mac()
 			return False
 		
-		permissions =self.registered_users[username][1]
+		permissions = self.registered_users[username][1]
 		self.authenticated_user = [username, permissions]
 
 		client_public_key = self.crypto.client_cert.public_key()
+
 		# Verify client signature
 		flag = self.crypto.cc_signature_validation(self.crypto.signature,self.client_nonce+self.crypto.auth_nonce,client_public_key)
 		
 		# Verify chain
 		flag1 = self.crypto.validate_cc_chain(self.crypto.client_cert)
-		print(f"Flag :{flag1}")
 
-		if flag1 and flag :
+		if flag1 and flag:
 			logger.info("Client validated")
 			message = {'type': 'AUTH_RESPONSE', 'status': 'SUCCESS', 'username': self.authenticated_user[0]}
 			secure_message = self.encrypt_payload(message)
@@ -628,22 +635,18 @@ class ClientHandler(asyncio.Protocol):
 			self.send_mac()
 			return False
 
-
-	
 	def process_secure(self):
 		"""
 		Processes a SECURE_X message from the client.
 		It has an encrypted payload that should be decrypted.
 		The payload has a JSON message that could be of type OPEN, DATA or CLOSE.
 		"""
-		logger.debug("Process Secure: {}".format(self.encrypted_data))
 		message = json.loads(self.decrypted_data[0])
 		mtype = message['type'] 
-		print(mtype)
-		
+		logger.info("Process SECURE_X: {}".format(mtype))
+
 		if mtype == 'OPEN':
-			print(self.state)
-			if self.state==STATE_CLIENT_AUTH:
+			if self.state == STATE_CLIENT_AUTH:
 				ret = self.process_open(message)
 			else:
 				self._send({'type': 'OK'})
@@ -655,21 +658,26 @@ class ClientHandler(asyncio.Protocol):
 			for msg in self.decrypted_data:
 				message['data'] += json.loads(msg)['data']
 			ret = self.process_data(message)
+
 		elif mtype == 'LOGIN_REQUEST':
 			ret = self.process_login_request(message)
+
 		elif mtype == 'CARD_LOGIN_REQUEST':
 			ret = self.process_card_login_request(message)
+
 		elif mtype == 'SERVER_AUTH_REQUEST':
 			ret = self.process_server_auth(message)
+
 		elif mtype == 'SERVER_AUTH_FAILED':
 			logger.warning("Server AUTH failed.")
 			ret=False
+
 		elif mtype == 'FILE_REQUEST':
 			ret = self.process_file_request(message)
+
 		elif mtype == 'AUTH_CERTIFICATE':
 			ret = self.process_client_certificate(message)
 			
-
 		elif mtype == 'CLOSE':
 			ret = self.process_close(message)
 
@@ -702,8 +710,7 @@ class ClientHandler(asyncio.Protocol):
 		:param message:
 		:return:
 		"""
-		logger.info("Send: {}".format(message['type']))
-		logger.debug("Send: {}".format(message))
+		logger.info("Sent: {}".format(message['type']))
 
 		message_b = (json.dumps(message) + '\r\n').encode()
 		self.transport.write(message_b)
