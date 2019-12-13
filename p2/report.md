@@ -12,7 +12,7 @@ Segurança Informática e Nas Organizações 2019/2020
 
 ## **1. Introdução**  
 
-O presente documento tem como principal objetivo descrever detalhadamente a solução desenvolvida tendo em conta os objetivos propostos para o terceiro projeto da unidade curricular de [Segurança Informática e Nas Organizações](https://www.ua.pt/pt/uc/4143) da [Universidade de Aveiro](www.ua.pt), considerando o seu planeamento, desenho, implementação e validação tendo em conta o código fornecido como base para o trabalho. 
+O presente documento tem como principal objetivo descrever detalhadamente a solução desenvolvida tendo em conta os objetivos propostos para o terceiro projeto da unidade curricular de [Segurança Informática e Nas Organizações](https://www.ua.pt/pt/uc/4143) da [Universidade de Aveiro](www.ua.pt), considerando o seu planeamento, desenho, implementação e validação, tendo em conta o código fornecido como base para o trabalho. 
 
 ## **2. Planeamento**  
 
@@ -20,7 +20,7 @@ O presente documento tem como principal objetivo descrever detalhadamente a solu
 
 De modo a planear a solução a desenvolver, é necessário considerar **os seguintes aspetos**, presentes no guião de apresentação do projeto:  
 
-1. **Desenhar um protocolo** para o estabelecimento de uma **sessão segura** entre o *cliente* e o *servidor* com autenticação de **ambos** os intervenientes, suportando:  
+1. **Desenhar um protocolo** para o estabelecimento de uma **sessão segura** entre um *cliente* e um *servidor*, com autenticação de **ambos** os intervenientes, suportando:  
 
     * a) Autenticação do cliente através do cartão de cidadão  
     * b) Autenticação do cliente através de desafio resposta  
@@ -31,9 +31,9 @@ De modo a planear a solução a desenvolver, é necessário considerar **os segu
 
 3. **Implementar a autenticação do cliente**, através de desafio resposta.  
 
-4. **Implementar o suporte para controlo de acesso** 
+4. **Implementar o suporte para controlo de acesso**.  
 
-5. **Implementar a autenticação do servidor** utilizando certificados X.509 .  
+5. **Implementar a autenticação do servidor** utilizando certificados X.509.  
 
 Outros aspetos a considerar são **os seguintes**:  
 
@@ -41,7 +41,7 @@ Outros aspetos a considerar são **os seguintes**:
 
 ### **2.2 Fluxo de troca de mensagens**    
 
-Para implementar os requisitos pedidos neste trabalho, definimos primeiramente qual seria o **fluxo de troca de mensagens** entre o cliente e o servidor, que de seguida iremos explicar. De modo a aumentar a segurança da nossa solução, decidimos manter alguns mecanismos utilizados na realização do **Projeto 2: Comunicações Seguras.** Este fluxo está divido em **oito fases distintas:** 
+Para implementar os requisitos pedidos neste trabalho, definimos primeiramente qual seria o **fluxo de troca de mensagens** entre o *cliente* e o *servidor*, que de seguida iremos explicar. De modo a aumentar a segurança da nossa solução, decidimos manter alguns mecanismos utilizados na realização do **Projeto 2: Comunicações Seguras.** Este fluxo está divido em **oito fases distintas:** 
 
 1. Início da negociação dos algoritmos a utilizar (cifras simétricas, modos de cifra e síntese)  
 2. Realização do algoritmo de **Diffie Helman**  
@@ -55,19 +55,20 @@ Para implementar os requisitos pedidos neste trabalho, definimos primeiramente q
 7. Envio de **pedaços** (*chunks*) de um ficheiro através de várias **mensagens DATA** cifradas.
 8. Término da sessão após a transferência completa do ficheiro através de uma **mensagem CLOSE** cifrada.  
 
-**Nota:** De realçar que todas as mensagens trocadas (exceto as enviadas antes do término da **fase 2**) são cifradas no campo **payload** de uma mensagem do tipo **SECURE_X**, acompanhadas seguidamente de **uma mensagem do tipo MAC**, com o intuito de garantir a confidencialidade e integridade das mesmas, respetivamentes.  
+**Nota:** De realçar que todas as mensagens trocadas (exceto as enviadas antes do término da **fase 2**) são cifradas no campo **payload** de uma mensagem do tipo **SECURE_X**, acompanhadas seguidamente de **uma mensagem do tipo MAC**, com o intuito de garantir a confidencialidade e integridade das mesmas, respetivamente.  
 
 De seguida, apresenta-se um **diagrama de sequências UML**, ilustrando todas as mensagens trocadas entre o cliente e o servidor:
 
+!['message-workflow'](./message-workflow.png)
 
 ## **3. Implementação**  
 
 ### **3.1. Implementação do protocolo para autenticação do servidor através de certificados X.509**  
 
-A autenticação do *servidor* inicia-se com a geração de um **NONCE** por parte do cliente. De seguida, o cliente envia ao servidor o NONCE através de uma mensagem do tipo `SERVER_AUTH_REQUEST`:
+A autenticação do *servidor* inicia-se com a geração de um **NONCE** por parte do *cliente*. De seguida, o *cliente* envia ao *servidor* o **NONCE** através de uma mensagem do tipo `SERVER_AUTH_REQUEST`:
 
 ```python=
-self.crypto.auth_nonce=os.urandom(16)
+self.crypto.auth_nonce = os.urandom(16)
 message = {'type': 'SERVER_AUTH_REQUEST', 'nonce':  base64.b64encode(self.crypto.auth_nonce).decode()}
 secure_message = self.encrypt_payload(message)
 self.state = STATE_SERVER_AUTH
@@ -75,62 +76,68 @@ self._send(secure_message)
 self.send_mac()
 ```
 
-O *servidor*, ao receber e processar esta mensagem, carrega os seu certificado, o certificado da sua raiz e a chave privada associada ao seu certificado, usando a chave privada para assinar o **NONCE** enviado pelo *cliente* . De seguida, o *servidor* envia o seu certificado,o certificado da sua raiz e a assinatura ao cliente através de uma mensagem do tipo `SERVER_AUTH_RESPONSE` :
+O *servidor*, ao receber e processar esta mensagem, carrega o seu certificado, o certificado da sua raiz e a chave privada associada ao seu certificado, usando-a para assinar o **NONCE** enviado pelo *cliente* . De seguida, o *servidor* envia ao cliente o seu certificado, o certificado da sua raiz e a assinatura através de uma mensagem do tipo `SERVER_AUTH_RESPONSE`:
 
 ```python=
-self.crypto.server_cert=self.crypto.load_cert("server_cert/secure_server.pem")
-self.crypto.server_ca_cert=self.crypto.load_cert("server_roots/Secure_Server_CA.pem")
-self.crypto.rsa_private_key=self.crypto.load_key_from_file("server_cert/server_key.pem")
+self.crypto.server_cert = self.crypto.load_cert("server_cert/secure_server.pem")
+self.crypto.server_ca_cert = self.crypto.load_cert("server_roots/Secure_Server_CA.pem")
+self.crypto.rsa_private_key = self.crypto.load_key_from_file("server_cert/server_key.pem")
 
-nonce=base64.b64decode(message['nonce'].encode())
+nonce = base64.b64decode(message['nonce'].encode())
 
 self.crypto.signature = self.crypto.rsa_signing(nonce, self.crypto.rsa_private_key)
-message={'type':'SERVER_AUTH_RESPONSE','signature':base64.b64encode(self.crypto.signature).decode(),'server_cert':base64.b64encode(self.crypto.get_certificate_bytes(self.crypto.server_cert)).decode(),'server_roots':base64.b64encode(self.crypto.get_certificate_bytes(self.crypto.server_ca_cert)).decode()}
+message = {'type': 'SERVER_AUTH_RESPONSE','signature': base64.b64encode(self.crypto.signature).decode(),'server_cert': base64.b64encode(self.crypto.get_certificate_bytes(self.crypto.server_cert)).decode(),'server_roots': base64.b64encode(self.crypto.get_certificate_bytes(self.crypto.server_ca_cert)).decode()}
 
 self._send(message)
 ```
 
-**Nota:** A variável `self.crypto` é um objeto da classe `Crypto`, desenvolvida por nós, com todo o processamento criptográfico da nossa solução.  
+**Nota:** A variável `self.crypto` é um objeto da classe `Crypto`, desenvolvida por nós e contendo todo o processamento criptográfico da nossa solução.  
 
-Após receber a mensagem com a assinatura e os certificados o *cliente* valida a assinatura criado pelo *servidor* com a chave pública do servidor. De seguida valida se o **common_name** do certificado do servidor é igual ao nome do servidor que ele pensa estar a conectar.
+Após receber a mensagem com a assinatura e com os certificados, o *cliente* valida a assinatura criada pelo *servidor* com a chave pública deste. De seguida, valida se o **common_name** do certificado do servidor é igual ao nome do servidor que ele supõe estar a contactar:
 
 ```python=
 # Validate server signature
-flag1=self.crypto.rsa_signature_verification(self.crypto.signature,self.crypto.auth_nonce,self.crypto.server_public_key)
+flag1 = self.crypto.rsa_signature_verification(self.crypto.signature, self.crypto.auth_nonce, self.crypto.server_public_key)
 logger.info(f'Server signature validation: {flag1}')
 
-#Validate common name
-flag2=self.host_name==self.crypto.get_common_name(self.crypto.server_cert)
+# Validate common name
+flag2 = self.host_name == self.crypto.get_common_name(self.crypto.server_cert)
 logger.info(f'Server common_name validation: {flag2}')
 ```
-Por fim o *cliente* cria a chain de certificados do servidor e executa todas as operações necessárias para validar cada certificado da chain:
+
+Por fim o *cliente* cria a **cadeia de certificados do *servidor*** e executa todas as operações necessárias para validar cada certificado da chain:
  
-1. Validar data de expiração:
+1. Validar data de expiração:  
+
 ```python=
 today = datetime.now().timestamp()
 return cert.not_valid_before.timestamp() <= today <= cert.not_valid_after.timestamp()
-```
-2. Validar purpose:
+```  
+
+2. Validar purpose:  
+
 ```python=
-if index==0:
-    flag=False
+if index == 0:
+    flag = False
     for c in cert.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value:
-        if c.dotted_string=="1.3.6.1.5.5.7.3.1":
-            flag=True
+        if c.dotted_string == "1.3.6.1.5.5.7.3.1":
+            flag = True
             break
     return flag
 else:
-    if cert.extensions.get_extension_for_class(x509.KeyUsage).value.key_cert_sign==True :
+    if cert.extensions.get_extension_for_class(x509.KeyUsage).value.key_cert_sign == True:
         return True
     else:
         return False
-```
-Ao validar o purpose dos certificados o primeiro certificado tem uma validação diferente dos outros. No primeiro certificado ,**certificado do servidor**, temos de garantir que inclui a KeyUsage **SERVER_AUTH**. Nos próximos certificados temos de garantir que incluem a KeyUsage **key_cert_sign** .
+```  
 
-3. Validar a assinatura do certificado:
+**Ao validar o purpose dos certificados**, verifica-se que o primeiro certificado tem uma validação diferente dos outros. No primeiro certificado, (que é o **certificado do servidor**), temos de garantir que inclui a KeyUsage **SERVER_AUTH**. Nos próximos certificados temos de garantir que incluem a KeyUsage **key_cert_sign**:
+
+3. Validar a assinatura do certificado:  
+
 ```python=
-cert_to_check_signature=cert_to_check.signature
-issuer_public_key=issuer_cert.public_key()
+cert_to_check_signature = cert_to_check.signature
+issuer_public_key = issuer_cert.public_key()
 
 try:
     issuer_public_key.verify(cert_to_check_signature,cert_to_check.tbs_certificate_bytes,padding.PKCS1v15(),cert_to_check.signature_hash_algorithm)
@@ -141,7 +148,8 @@ except:
 return True
 ```
 
-4. Validar o common name do certificado:
+4. Validar o common name do certificado:  
+
 ```python=
 if (self.get_issuer_common_name(cert_to_check)!=self.get_common_name(issuer_cert)):
     print(self.get_issuer_common_name(cert_to_check))
@@ -151,7 +159,8 @@ if (self.get_issuer_common_name(cert_to_check)!=self.get_common_name(issuer_cert
 return True
 ```
 
-5. Validar o estado de revogação do certificado :
+5. Validar o estado de revogação do certificado:  
+
 ```python=
 try:
     builder = ocsp.OCSPRequestBuilder()
@@ -160,62 +169,152 @@ try:
     req = builder.build()
     for j in cert_to_check.extensions.get_extension_for_class(x509.AuthorityInformationAccess).value:
         if j.access_method.dotted_string == "1.3.6.1.5.5.7.48.1": 
-            rev_list=None
+            rev_list = None
 
-            #Downloading list
-            der=req.public_bytes(serialization.Encoding.DER)
+            # Downloading list
+            der = req.public_bytes(serialization.Encoding.DER)
 
-            ocsp_link=j.access_location.value
-            r=requests.post(ocsp_link, headers={'Content-Type': 'application/ocsp-request'},data=der)
+            ocsp_link = j.access_location.value
+            r = requests.post(ocsp_link, headers={'Content-Type': 'application/ocsp-request'},data=der)
 
             
             ocsp_resp = ocsp.load_der_ocsp_response(r.content)
-            if ocsp_resp.certificate_status== ocsp.OCSPCertStatus.GOOD:
+            if ocsp_resp.certificate_status == ocsp.OCSPCertStatus.GOOD:
                 return False
             else:
                 return True
 
-            
-                        
 except Exception as e:
-print(e)
-print("OCSP not available")
+    print(e)
+    print("OCSP not available")
 
 try:
     for i in cert_to_check.extensions.get_extension_for_class(x509.CRLDistributionPoints).value:
         for b in i.full_name:
-            rev_list=None
-            #Downloading list
-            file_name=wget.download(b.value)
-            #read revocation list
+            rev_list = None
+            # Downloading list
+            file_name = wget.download(b.value)
+            # Read revocation list
             try:
-                rev_list=self.load_cert_revocation_list(file_name,"pem")
-            except Exception as e :
+                rev_list = self.load_cert_revocation_list(file_name,"pem")
+            except Exception as e:
                 print(e)
             try:
-                rev_list=self.load_cert_revocation_list(file_name,"der")
+                rev_list = self.load_cert_revocation_list(file_name,"der")
             except:
                 print("Not der.")
             if rev_list is None:
                 return False
             
-            flag=cert_to_check.serial_number in [l.serial_number for l in rev_list]
+            flag = cert_to_check.serial_number in [l.serial_number for l in rev_list]
 except Exception as e:
     print("CRL not available")
 ```
-Ao validar o estado de revogação dos certificados tentamos inicialmente realizar esta tarefa através de OCSP e se nao for possivel recorremos a CRL e às DeltaCRL. É importante referir que parte do código foi omitido do relatório por ser muito extenso.
+**Ao validar o estado de revogação dos certificados**, inicialmente tentamos realizar esta tarefa através de **OCSP** e, caso não seja possível, recorremos **à CRL e às DeltaCRL**. 
 
-Se todas estas condições forem validadas o *cliente* irá validar o servidor e transitar para a próxima de fase onde se irá autenticar.
+**Nota:** É importante referir que parte do código foi omitido do relatório por ser muito extenso.
 
-Os certifcados usados para represntar o servidor foram criados através do programa **XCA** e exportados no formato PEM para poderem ser carregados pelo servidor e enviados para o cliente. Adicionalmente criamos uma lista de certificados e colocamos-a num url online para poder ser incluida nos certificados como *CRLDistributuion Point*, permitindo assim a validação do estado de revogação dos certificados do servidor pelo cliente.
+Se todas estas condições forem validadas, o *cliente* irá também validar o *servidor* e transitar para a próxima de fase do processo, onde se irá tentar autenticar.
+
+**Nota:** Os certifcados usados para representar o servidor foram criados através do programa **XCA** e exportados no formato **PEM** para poderem ser carregados pelo *servidor* e enviados para o *cliente*. Adicionalmente, criámos uma lista de certificados e colocámo-la num endereço online para poder ser incluída nos certificados como ***CRLDistributuion Point***, permitindo assim a validação do estado de revogação dos certificados do servidor pelo cliente.
 
 #### Servidor  
-![server_validation_server](server_validation_s.png)
+![server_validation_server](server_validation_s.png)  
+
 #### Cliente  
-![server_validation_client](server_validation_c.png)
+![server_validation_client](server_validation_c.png)  
+
+
 
 
 ### **3.2. Implementação do protocolo para autenticação de utentes através da apresentação de senhas**  
+
+Após o processo de autenticação do *servidor*, o *cliente* necessita primeiro de se autenticar antes de fazer qualquer pedido para a transferência de um ficheiro. Tendo isto em mente, decidimos implementar duas possíveis formas de autenticação do cliente para com o servidor: através de **um mecanismo de desafio-resposta** ou ainda **através do cartão de cidadão.** 
+
+Neste ponto iremos abordar a nossa implementação relativa ao **mecanismo de desafio-resposta.** Portanto, eis o nosso mecanismo:  
+
+1. Antes de qualquer pedido, o *cliente* gera um par de chaves assimétricas da seguinte forma:  
+
+```python3=
+def key_pair_gen(self, length):
+    valid_lengths = [1024, 2048, 3072, 4096]
+
+    if length not in valid_lengths:
+        logger.debug("ERROR - Not a valid length!")
+        return 
+            
+    # Private key generation
+    private_key = rsa.generate_private_key(
+        public_exponent=65537, 
+        key_size=length,
+        backend=default_backend()
+    )
+
+    pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+
+    priv_key = base64.b64encode(pem).decode()
+
+    # Public key generation
+    public_key = private_key.public_key()
+    pem = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    pub_key = base64.b64encode(pem).decode()
+
+    return (pub_key, priv_key)
+```
+
+2. De seguida, o *cliente* envia uma mensagem ao *servidor* do tipo `LOGIN_REQUEST`, juntamente com um ***nonce*** e a **chave-pública** gerada no ponto anterior (ambos no formato de *base64*). 
+
+```python3=
+message = {'type': 'LOGIN_REQUEST', 'nonce':  base64.b64encode(self.crypto.auth_nonce).decode(), 'public_key': self.rsa_public_key}
+secure_message = self.encrypt_payload(message)
+self._send(secure_message)
+self.send_mac()
+```
+
+**Nota:** Para enviar esta mensagem, foi aproveitado o código desenvolvido no **Projeto 2: Comunicações Seguras**, de modo a cifrar a mensagem `LOGIN_REQUEST`, adicionando-a a um campo de `'payload'` de uma mensagem do tipo `SECURE_X`, de modo a garantir a confidencialidade do conteúdo enviado. Imediatamente de seguida, é enviado um `MAC`, de modo a garantir a integridade da mensagem anteriormente enviada.  
+
+3. O *servidor*, ao receber o pedido de autenticação por desafio-resposta, guarda o ***nonce*** e a **chave-pública** do cliente e envia-lhe um desafio (um novo ***nonce***) através de uma mensagem do tipo `CHALLENGE_REQUEST`.
+
+```python3=
+self.state = STATE_CLIENT_AUTH
+self.client_nonce = base64.b64decode(message['nonce'].encode())
+self.crypto.auth_nonce = os.urandom(16)
+self.client_public_key = base64.b64decode(message['public_key'].encode())
+message = {'type': 'CHALLENGE_REQUEST', 'nonce': base64.b64encode(self.crypto.auth_nonce).decode()}
+secure_message = self.encrypt_payload(message)
+self._send(secure_message)
+self.send_mac()
+```  
+
+4. O *cliente*, ao receber o desafio do *servidor*, primeiramente introduz o seu **nome de utilizador** e a sua **palavra-passe**, da seguinte forma:  
+
+```python3=
+self.credentials['username'] = input("Username: ")
+self.credentials['password'] = getpass.getpass("Password: ")
+```  
+
+De seguida, concatena o seu **nonce** gerado, com a sua **palavra-passe** e com o **nonce** recebido do servidor, nesta ordem. Tendo esta **resposta**, o *cliente* assina-a com a sua **chave-privada** gerada no **ponto 1.**. Por fim, envia ao servidor o seu nome de utilizador e a mensagem assinada através de uma mensagem do tipo `CHALLENGE_RESPONSE`:  
+
+```python3=
+self.server_nonce = str(base64.b64decode(message['nonce'].encode()))
+message = str(self.crypto.auth_nonce) + self.credentials['password'] + self.server_nonce
+private_key = self.crypto.load_private_key(base64.b64decode(self.rsa_private_key.encode()))
+self.signed_challenge = self.crypto.rsa_signing(message.encode(), private_key)
+
+message = {}
+message['type'] = 'CHALLENGE_RESPONSE'
+message['credentials'] = {}
+message['credentials']['username'] = self.credentials['username']
+message['credentials']['signed_challenge'] = base64.b64encode(self.signed_challenge).decode()
+self._send(message)
+```
 
 ### **3.3. Implementção do mecanismo para controlo de acesso**  
 
