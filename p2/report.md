@@ -231,6 +231,8 @@ Se todas estas condições forem validadas, o *cliente* irá também validar o *
 
 Após o processo de autenticação do *servidor*, o *cliente* necessita primeiro de se autenticar antes de fazer qualquer pedido para a transferência de um ficheiro. Tendo isto em mente, decidimos implementar duas possíveis formas de autenticação do cliente para com o servidor: através de **um mecanismo de desafio-resposta** ou ainda **através do cartão de cidadão.** 
 
+**NOTA IMPORTANTE:** Caso pretenda alterar o modo de autenticação do cliente, terá de mudar o valor de variável `self.validation_type`, no ficheiro `client.py` **(linha 64)** para **"CHALLENGE"** ou **"CITIZEN_CARD".**
+
 Neste ponto iremos abordar a nossa implementação relativa ao **mecanismo de desafio-resposta.** Portanto, eis o nosso procedimento:  
 
 1. Antes de qualquer pedido, o *cliente* gera um par de chaves assimétricas da seguinte forma:  
@@ -399,14 +401,14 @@ diogo_carvalho8@ua.pt	{u^=g`pr9c?.y,[z4#/!	A1-T1
 bernardo_mendes9@ua.pt	>{_1*ub4|\&>=)ehs8w?	A1-T1
 ```
 
-Um potencial problema com este ficheiro é o facto de o seu conteúdo (em particular as palavras-passes) estarem em **plain text.** Para resolver este problema, uma possível solução seria a de o *servidor* gerar um par de chaves assimétricas e, no momento de registo de um novo utilizador,  encriptar a palavra-passe no ficheiro com a sua **chave-pública**. Mais tarde, no processo de autenticação (seja ele por desafio-resposta ou por cartão de cidadão), o *servidor*, ao carregar a palavra-passe encriptada do ficheiro `users.csv`, poderia desencriptá-la com a sua **chave-privada**, garantindo a confidencialidade de todas as palavras-passes armazenadas em persistência no *servidor*.  
+Um potencial problema com este ficheiro é o facto de o seu conteúdo (em particular as palavras-passes) estarem em **plain text.** Para resolver este problema, uma possível solução seria a de o *servidor* gerar um par de chaves assimétricas e, no momento de registo de um novo utilizador,  encriptar a palavra-passe no ficheiro com a sua **chave-pública**. Mais tarde, no processo de autenticação, o *servidor*, ao carregar a palavra-passe encriptada do ficheiro `users.csv`, poderia desencriptá-la com a sua **chave-privada**, garantindo a confidencialidade de todas as palavras-passes armazenadas em persistência no *servidor*.  
 
 
 Após explicado o desenho do mecanismo de controlo de acessos, iremos descrevê-lo em acção no nosso fluxo de troca de mensagens.
 
 * **Controlo de autenticação:**  
 
-Quando um determinado utilizador se tenta autenticar, para além de ser necessário de cumprir as condições expostas no ponto **3.2. Implementação do protocolo para autenticação de utentes através da apresentação de senhas**, o nosso mecanismo pressupõe que este apenas se possa autenticar caso tenha a **flag 'A'** com o valor 1. Por defeito, todos os novos utilizadores registados têm **A = 1**. No entanto, para prevenir tentativas de autenticação indevidas, decidimos implementar a seguinte filosofia: caso um determinado nome de utilizador tente autenticar-se no servidor **três vezes seguidas sem sucesso**, esta tentativa de autenticação é catalogada como sendo **suspeita**, pelo que esse nome de utiliador perde a permissão a autenticar-se no servidor, passando a **flag 'A'** para o valor de 0 (sendo atualizada em persistência):  
+Quando um determinado utilizador se tenta autenticar, para além de ser necessário cumprir as condições expostas no ponto **3.2. Implementação do protocolo para autenticação de utentes através da apresentação de senhas**, o nosso mecanismo pressupõe que este apenas se possa autenticar caso tenha a **flag 'A'** com o valor 1. Por defeito, todos os novos utilizadores registados têm **A = 1**. No entanto, para prevenir tentativas de autenticação indevidas, decidimos implementar a seguinte filosofia: caso um determinado nome de utilizador tente autenticar-se no servidor **três vezes seguidas sem sucesso**, esta tentativa de autenticação é catalogada como sendo **suspeita**, pelo que esse nome de utiliador perde a permissão a autenticar-se no servidor, passando a **flag 'A'** para o valor de 0 (sendo atualizada em persistência):  
 
 ```python=
 self.authentication_tries += 1
@@ -471,7 +473,7 @@ Em caso afirmativo, o ficheiro começa a ser transferido por **pedaços** (*chun
 
 ### **3.4. Implementação do protocolo para autentição de utentes através do cartão de cidadão**  
 
-Em alternativa à autenticação do *cliente* através da apresentação de senhas, implementamos a autenticação através do cartão de cidadão. Tal como no protocolo de senhas começamos por enviar uma mensagem ao servidor, depois deste ser validado, com um **Nonce** através de uma mensagem do tipo `CARD_LOGIN_REQUEST` : 
+Em alternativa à autenticação do *cliente* através da apresentação de senhas, implementámos a autenticação através do cartão de cidadão. Tal como no protocolo de senhas, começamos por enviar uma mensagem ao servidor (depois deste ser validado) com um **Nonce** através de uma mensagem do tipo `CARD_LOGIN_REQUEST`: 
 
 ```python=
 message = {'type': 'CARD_LOGIN_REQUEST', 'nonce':base64.b64encode(self.crypto.auth_nonce).decode()}
@@ -480,7 +482,7 @@ self._send(secure_message)
 self.send_mac()
 ```
 
-O *servidor*, ao receber e processar esta mensagem, guarda o **NONCE** enviado pelo cliente e gera outro **NONCE** que irá enviar para o cliente através de uma mensagem do tipo `CARD_LOGIN_RESPONSE`:
+O *servidor*, ao receber e processar esta mensagem, guarda o **NONCE** enviado pelo cliente e gera outro **NONCE**, que irá ser enviado para o cliente através de uma mensagem do tipo `CARD_LOGIN_RESPONSE`:
 
 ```python=
 self.client_nonce = base64.b64decode(message['nonce'].encode())
@@ -491,7 +493,7 @@ self._send(secure_message)
 self.send_mac()
 ```
 
-Após receber a mensagem com o **NONCE** do servidor, o *cliente* irá inserir o seu nome de utilizador para garantir a validação do controlo de acesso (explicado no anteriormente no ponto 3.3) e irá assinar com o seu cartão de cidadão a concatenação do **NONCE** gerado por ele com o **NONCE** enviado pelo servidor. De seguida, vai enviar o certificado de autenticação do cartão de cidadão utilizado para gerar a assinatura, a assinatura e o username através de uma mensagem do tipo `AUTH_CERTIFICATE`:
+Após receber a mensagem com o **NONCE** do servidor, o *cliente* irá inserir o seu nome de utilizador para garantir a validação do controlo de acesso (explicado no anteriormente no **ponto 3.3**) e irá assinar, com o seu cartão de cidadão, a concatenação do **NONCE** gerado por ele com o **NONCE** enviado pelo servidor. De seguida, vai enviar o certificado de autenticação do cartão de cidadão utilizado para gerar a assinatura, a assinatura e o username através de uma mensagem do tipo `AUTH_CERTIFICATE`:
 
 ```python=
 self.credentials['username'] = input("Username: ")
@@ -503,13 +505,13 @@ secure_message = self.encrypt_payload({'type': 'AUTH_CERTIFICATE','cert':base64.
 self._send(secure_message)
 self.send_mac()
 ```
-O *servidor* ao receber esta mensagem, começa por verificar se o username existe na sua lista de users (necessário para efetuar a seguir a validação do controlo de acesso) e de seguida valida a assinatura enviada pelo cliente, com a chave pública presente no certificado do mesmo.
+O *servidor*, ao receber esta mensagem, começa por verificar se o username existe na sua lista de users (necessário para efetuar posteriormente a validação do controlo de acesso), e de seguida valida a assinatura enviada pelo cliente, com a chave pública presente no certificado do mesmo.
 
-Por fim, tal como na validação da cadeia de certificação do servidor, o servidor irá construir a chain de certificados associada ao cartão de cidadão do cliente, validando cada certificado em relação à data de expiração, purpose,assinatura do certificado,common name e estado de revogação.
+Por fim, e tal como na validação da cadeia de certificação do servidor, este irá construir a **cadeia de certificados** associada ao **cartão de cidadão do cliente**, validando cada certificado em relação à data de expiração, purpose,assinatura do certificado, common name e estado de revogação.
 
-É importante referir, que ao validar o estado de revogação do certificado da raiz do estado através de OCSP, recebemos o estado *REVOKED*.Após alguma pesquisa e questionar os docentes, acabamos por não conseguir encontrar solução e por isso considera-mos que neste caso o certificado está validado, tal como foi sugerido pelo docente Vitor Cunha.
+É importante referir que, ao validar o estado de revogação do certificado da raiz do estado através de **OCSP**, recebemos o estado ***REVOKED***. Após alguma pesquisa e algumas questãos aos docentes da unidade curricular, acabámos por não conseguir encontrar solução para este problema e, portanto, considerá-mos que neste caso o certificado está **validado**, tal como foi sugerido pelo docente Vitor Cunha.
 
-Se todas estas condições forem validadas o *servidor* irá validar o cliente e transitar para a próxima de fase , onde o cliente poderá iniciar o envio do ficheiro.
+Se todas estas condições forem efetivamente validadas, o *servidor* irá autenticar o cliente e transitar para a próxima fase, onde o cliente poderá iniciar o envio do ficheiro.
 
 #### Servidor  
 ![cc_authentication_server](cc_authentication_s.png)  
