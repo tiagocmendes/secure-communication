@@ -333,6 +333,7 @@ class ClientHandler(asyncio.Protocol):
 		username = message['credentials']['username']
 		
 		if username not in self.registered_users or 'A1' not in self.registered_users[username][1]:
+			logger.info("{} authenticated denied.".format(username))
 			message = {'type': 'AUTH_RESPONSE', 'status': 'DENIED'}
 			secure_message = self.encrypt_payload(message)
 			self._send(secure_message)
@@ -344,6 +345,7 @@ class ClientHandler(asyncio.Protocol):
 		signature_verification = self.crypto.rsa_signature_verification(base64.b64decode(signed_challenge.encode()), (str(self.client_nonce) + pw + str(self.crypto.auth_nonce)).encode(), self.crypto.load_public_key(self.client_public_key))
 
 		if signature_verification:
+			logger.info("{} authenticated with success!".format(username))
 			message = {'type': 'AUTH_RESPONSE', 'status': 'SUCCESS', 'username': username}
 			secure_message = self.encrypt_payload(message)
 			self._send(secure_message)
@@ -356,12 +358,14 @@ class ClientHandler(asyncio.Protocol):
 				# remove authentication permission
 				self.registered_users[username][1] = self.registered_users[username][1].replace('1', '0')
 				self.update_users()
+				logger.info("{} authenticated denied.".format(username))
 				message = {'type': 'AUTH_RESPONSE', 'status': 'DENIED'}
 				secure_message = self.encrypt_payload(message)
 				self._send(secure_message)
 				self.send_mac()
 				return False
-			
+
+			logger.info("{} authenticated failed.".format(username))
 			message = {'type': 'AUTH_RESPONSE', 'status': 'FAILED'}
 			secure_message = self.encrypt_payload(message)
 			self._send(secure_message)

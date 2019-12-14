@@ -61,7 +61,7 @@ class ClientProtocol(asyncio.Protocol):
         self.nonce = os.urandom(16)
         self.server_nonce = None
 
-        self.validation_type="CITIZEN_CARD" # CHALLENGE or CITIZEN_CARD
+        self.validation_type = "CHALLENGE" # CHALLENGE or CITIZEN_CARD
 
         self.rsa_public_key, self.rsa_private_key = self.crypto.key_pair_gen( 4096)
 
@@ -129,11 +129,9 @@ class ClientProtocol(asyncio.Protocol):
         
 		# Generate server MAC
         self.crypto.mac_gen(base64.b64decode(self.recv_encrypted_data))
-        logger.info("Client mac: {}".format(base64.b64decode(client_mac)))
-        logger.info("Server mac: {}".format(self.crypto.mac))
         
         if client_mac == self.crypto.mac:
-            logger.info("Integrity controll: Success")
+            logger.info("Integrity control: Success")
             return (True, None)
         else:
             return (False, 'Integrity control failed.')
@@ -209,7 +207,7 @@ class ClientProtocol(asyncio.Protocol):
             return
 
         mtype = message.get('type', None)
-        self.log_state(mtype)
+        logger.info("Received: {}".format(mtype))
         
         if mtype == 'SECURE_X':
             self.recv_encrypted_data += message['payload']
@@ -274,6 +272,7 @@ class ClientProtocol(asyncio.Protocol):
         
         elif mtype == 'AUTH_RESPONSE':
             if message['status'] == 'SUCCESS':
+                logger.info('User authentication with success.')
                 self.process_authentication(message)
             elif message['status'] == 'DENIED':
                 logger.info('User authentication denied.')
@@ -380,9 +379,9 @@ class ClientProtocol(asyncio.Protocol):
 		It has an encrypted payload that should be decrypted.
 		The payload has a JSON message that could be of type OPEN, DATA or CLOSE.
 		"""
-        logger.debug("Process Secure: {}".format(self.recv_encrypted_data))
         message = json.loads(self.recv_decrypted_data[0])
         mtype = message['type']
+        logger.info("Process SECURE_X: {}".format(mtype))
 
         if mtype == 'CHALLENGE_REQUEST':
             self.process_challenge(message)
@@ -418,6 +417,7 @@ class ClientProtocol(asyncio.Protocol):
         
         elif mtype == 'AUTH_RESPONSE':
             if message['status'] == 'SUCCESS':
+                logger.info('User authentication with success.')
                 self.process_authentication(message)
             elif message['status'] == 'DENIED':
                 logger.info('User authentication denied.')
@@ -481,7 +481,6 @@ class ClientProtocol(asyncio.Protocol):
         """
 		Called when a client is authenticated to perform access controll.
 		"""
-
         secure_message = self.encrypt_payload({'type': 'FILE_REQUEST'})
         self._send(secure_message)
         self.send_mac()
@@ -599,8 +598,7 @@ class ClientProtocol(asyncio.Protocol):
         :param message:
         :return:
         """
-        logger.info("Send: {}".format(message['type']))
-        logger.debug("Send: {}".format(message))
+        logger.info("Sent: {}".format(message['type']))
 
         message_b = (json.dumps(message) + '\r\n').encode()
         self.transport.write(message_b)

@@ -231,7 +231,7 @@ Se todas estas condições forem validadas, o *cliente* irá também validar o *
 
 Após o processo de autenticação do *servidor*, o *cliente* necessita primeiro de se autenticar antes de fazer qualquer pedido para a transferência de um ficheiro. Tendo isto em mente, decidimos implementar duas possíveis formas de autenticação do cliente para com o servidor: através de **um mecanismo de desafio-resposta** ou ainda **através do cartão de cidadão.** 
 
-Neste ponto iremos abordar a nossa implementação relativa ao **mecanismo de desafio-resposta.** Portanto, eis o nosso mecanismo:  
+Neste ponto iremos abordar a nossa implementação relativa ao **mecanismo de desafio-resposta.** Portanto, eis o nosso procedimento:  
 
 1. Antes de qualquer pedido, o *cliente* gera um par de chaves assimétricas da seguinte forma:  
 
@@ -278,7 +278,8 @@ self._send(secure_message)
 self.send_mac()
 ```
 
-**Nota:** Para enviar esta mensagem, foi aproveitado o código desenvolvido no **Projeto 2: Comunicações Seguras**, de modo a cifrar a mensagem `LOGIN_REQUEST`, adicionando-a a um campo de `'payload'` de uma mensagem do tipo `SECURE_X`, de modo a garantir a confidencialidade do conteúdo enviado. Imediatamente de seguida, é enviado um `MAC`, de modo a garantir a integridade da mensagem anteriormente enviada.  
+**Nota:** Para enviar esta mensagem, foi aproveitado o código desenvolvido no **Projeto 2: Comunicações Seguras**, de modo a cifrar a mensagem `LOGIN_REQUEST`, adicionando-a a um campo de `'payload'` de uma mensagem do tipo `SECURE_X`, de modo a garantir a confidencialidade do conteúdo enviado. Imediatamente de seguida, é enviado um `MAC`, de modo a garantir a integridade da mensagem anteriormente enviada. De salientar ainda que as próximas mensagens são também encriptadas.  
+
 
 3. O *servidor*, ao receber o pedido de autenticação por desafio-resposta, guarda o ***nonce*** e a **chave-pública** do cliente e envia-lhe um desafio (um novo ***nonce***) através de uma mensagem do tipo `CHALLENGE_REQUEST`.
 
@@ -314,9 +315,159 @@ message['credentials'] = {}
 message['credentials']['username'] = self.credentials['username']
 message['credentials']['signed_challenge'] = base64.b64encode(self.signed_challenge).decode()
 self._send(message)
+```  
+
+5. O *servidor*, ao receber a resposta do *cliente*, primeiro verifica se o nome de utilizador fornecido está registado em persitência e se tem permissão de autenticação (explicado com maior detalhe na secção **3.3. Implementação do mecanismo para controlo de acesso**):  
+
+```python3=
+if username not in self.registered_users or 'A1' not in self.registered_users[username][1]:
+	message = {'type': 'AUTH_RESPONSE', 'status': 'DENIED'}
+	secure_message = self.encrypt_payload(message)
+	self._send(secure_message)
+	self.send_mac()
+	return False
+```  
+
+Caso o nome de utilizador introduzido esteja registado no sistema, o *servidor* carrega a sua **palavra-passe** e concatena o **nonce** recebido do cliente no **ponto 2.** com a palavra-passe carregada e com o seu **nonce**, por esta ordem e idêntica à realizada pelo cliente no **ponto 4.**. De seguida, o *servidor* valida a **mensagem assinada recebida** através da chava-pública do cliente. Caso a mensagem assinada seja corretamente validada, o *servidor* garante a autenticidade do nome de utilizador em questão, enviando-lhe uma mensagem do tipo `AUTH_RESPONSE` com um `'status'` de `SUCCESS`:  
+
+```python3=
+signed_challenge = message['credentials']['signed_challenge']
+pw, permissions = self.registered_users[username][0], self.registered_users[username][1]	
+signature_verification = self.crypto.rsa_signature_verification(base64.b64decode(signed_challenge.encode()), (str(self.client_nonce) + pw + str(self.crypto.auth_nonce)).encode(), self.crypto.load_public_key(self.client_public_key))
+
+if signature_verification:
+	message = {'type': 'AUTH_RESPONSE', 'status': 'SUCCESS', 'username': username}
+	secure_message = self.encrypt_payload(message)
+	self._send(secure_message)
+	self.send_mac()
+	self.authenticated_user = [username, permissions]
 ```
 
-### **3.3. Implementção do mecanismo para controlo de acesso**  
+Caso a mensagem assinada não seja corretamente validade, o *servidor* não consegue autenticar o *cliente*, pelo que lhe manda uma mensagem do tipo `AUTH_RESPONSE` mas com um `'status'` de `FAILED`:  
+
+```python3=
+message = {'type': 'AUTH_RESPONSE', 'status': 'FAILED'}
+secure_message = self.encrypt_payload(message)
+self._send(secure_message)
+self.send_mac()
+```
+
+De seguida seguem-se capturas de ecrã do modo de funcionamento deste mecanismo, tanto do lado do *cliente* como do *servidor*:  
+
+**Cliente: autenticação com sucesso**  
+
+![cli_challenge.png](./cli_challenge.png)
+
+**Servidor: autenticação com sucesso**  
+
+![sv_challenge.png](./sv_challenge.png)
+
+**Cliente: palavra-passe incorreta**  
+
+![cli_bad_challenge.png](./cli_bad_challenge.png)  
+
+**Servidor: palavra-passe incorreta**  
+
+![sv_bad_challenge.png](./sv_bad_challenge.png)  
+
+### **3.3. Implementação do mecanismo para controlo de acesso**  
+
+Outro dos objetivos deste trabalho prático era a implementação de um mecanismo para **controlo de acesso** dos utilizadores registados no servidor, permitindo indicar **explicitamente** se um utilizador poderia ou não transferir ficheiros. 
+
+Para tal, decidimos gerar diversos **nomes de utilizadores aleatórios**, cada um com uma **palavra-passe** de 20 caracteres (também esta aleatória). O alfabeto base de geração destas palavras passes tinha os seguintes 66 carateres: 
+
+```
+abcdefghijklmnopqrstuvwxyz123456789!#$%&'()*+,-./:;<=>?@[\]^_`{|}~`
+```
+
+permitindo gerar **66^20 palavras-passes distintas**, tornando os ataques por dicionário praticamente impossíveis.
+Relativamente às permissões de acesso de cada utilizador, definimos dois tipos de permissões: **AUTENTICAÇÃO** (flag 'A') e **TRANSFERÊNCIA** (flag 'T'). Quando à flag 'A', esta verifica se um determinado nome de utilizador, mesmo registado em persistência no servidor, tem permissão de se autenticar ('A' = 1) ou não ('A' = 0). Quando à flag 'T', esta verifica se um determinado nome de utilizador tem permissão de tranferência de ficheiros ('T' = 1), ou não ('T' = 0). 
+
+O conteúdo do ficheiro `users.csv` é o seguinte:  
+
+```
+Username	Password	Permissions
+pedro_pereira0@ua.pt	+w,rzvbq<g+,l3ub+q^g	A0-T0
+diogo_mendes1@ua.pt	i*gl}a{g?tc-x!<t:'$}	A1-T0
+bernardo_vasconcelos2@ua.pt	ynpax9<1;{exgdz`{ah<	A1-T1
+bernardo_pereira3@ua.pt	uege|%6]jw|qf=~onm<^	A1-T1
+joão_vasconcelos4@ua.pt	5i9;!l;,:471ro4z+ix\	A1-T1
+bernardo_barroso5@ua.pt	3k7*wa?/ba)|\oi5rv#)	A1-T0
+pedro_amorim6@ua.pt	;d{kli;jn-wd:#=9=o_j	A1-T1
+diogo_mendes7@ua.pt	2&47;j_@`'bv+$l'$q>f	A1-T0
+diogo_carvalho8@ua.pt	{u^=g`pr9c?.y,[z4#/!	A1-T1
+bernardo_mendes9@ua.pt	>{_1*ub4|\&>=)ehs8w?	A1-T1
+```
+
+Um potencial problema com este ficheiro é o facto de o seu conteúdo (em particular as palavras-passes) estarem em **plain text.** Para resolver este problema, uma possível solução seria a de o *servidor* gerar um par de chaves assimétricas e, no momento de registo de um novo utilizador,  encriptar a palavra-passe no ficheiro com a sua **chave-pública**. Mais tarde, no processo de autenticação (seja ele por desafio-resposta ou por cartão de cidadão), o *servidor*, ao carregar a palavra-passe encriptada do ficheiro `users.csv`, poderia desencriptá-la com a sua **chave-privada**, garantindo a confidencialidade de todas as palavras-passes armazenadas em persistência no *servidor*.  
+
+
+Após explicado o desenho do mecanismo de controlo de acessos, iremos descrevê-lo em acção no nosso fluxo de troca de mensagens.
+
+* **Controlo de autenticação:**  
+
+Quando um determinado utilizador se tenta autenticar, para além de ser necessário de cumprir as condições expostas no ponto **3.2. Implementação do protocolo para autenticação de utentes através da apresentação de senhas**, o nosso mecanismo pressupõe que este apenas se possa autenticar caso tenha a **flag 'A'** com o valor 1. Por defeito, todos os novos utilizadores registados têm **A = 1**. No entanto, para prevenir tentativas de autenticação indevidas, decidimos implementar a seguinte filosofia: caso um determinado nome de utilizador tente autenticar-se no servidor **três vezes seguidas sem sucesso**, esta tentativa de autenticação é catalogada como sendo **suspeita**, pelo que esse nome de utiliador perde a permissão a autenticar-se no servidor, passando a **flag 'A'** para o valor de 0 (sendo atualizada em persistência):  
+
+```python=
+self.authentication_tries += 1
+if self.authentication_tries == 3:
+	# remove authentication permission
+	self.registered_users[username][1] = self.registered_users[username][1].replace('1', '0')
+	self.update_users()
+	logger.info("{} authenticated denied.".format(username))
+	message = {'type': 'AUTH_RESPONSE', 'status': 'DENIED'}
+	secure_message = self.encrypt_payload(message)
+	self._send(secure_message)
+	self.send_mac()
+``` 
+
+**Cliente - Captura de ecrã de um cliente a perder a permissão de autenticação após 3 tentativas:**
+
+![deny_user.png](./deny_user.png)
+
+
+* **Controlo de transferência de ficheiro:**  
+
+Após ser autenticado, um utilizador pede permissão para transferir um determinado ficheiro. Ora, e assentando nos pressupostos descritos em cima, o requerente só será capaz de transferir o ficheiro caso a **flag 'T'** tenha o valor de 1. No caso contrário, e por questões de simplificação do fluxo de troca de mensagens, o servidor encerra a conexão com este utilizador. 
+
+Fluxo de mensagens:  
+
+1. O cliente pede para transferir o ficheiro:  
+
+```python=
+secure_message = self.encrypt_payload({'type': 'FILE_REQUEST'})
+self._send(secure_message)
+self.send_mac()
+self.state = STATE_OPEN
+```  
+
+2. O servidor recebe o pedido e verifica se o utilizador em questão tem permissão para transferir o ficheiro:  
+
+```python=
+if 'T1' in self.authenticated_user[1]:
+	message = {'type': 'FILE_REQUEST_RESPONSE', 'status': 'PERMISSION_GRANTED'}
+	secure_message = self.encrypt_payload(message)
+	self._send(secure_message)
+	self.send_mac()
+else:
+	message = {'type': 'FILE_REQUEST_RESPONSE', 'status': 'PERMISSION_DENIED'}
+	secure_message = self.encrypt_payload(message)
+	self._send(secure_message)
+	self.send_mac()
+	return False
+
+return True
+```
+
+Em caso afirmativo, o ficheiro começa a ser transferido por **pedaços** (*chunks*), como demonstrado no **Projeto 2: Comunicações Seguras.**
+
+**Cliente - Permissão concedidade para transferir o ficheiro:**
+
+![t1.png](./t1.png)
+
+**Cliente - Permissão não concedida para transferir o ficheiro:**
+
+![t2.png](./t2.png)
 
 ### **3.4. Implementação do protocolo para autentição de utentes através do cartão de cidadão**  
 
@@ -361,14 +512,16 @@ Por fim, tal como na validação da cadeia de certificação do servidor, o serv
 Se todas estas condições forem validadas o *servidor* irá validar o cliente e transitar para a próxima de fase , onde o cliente poderá iniciar o envio do ficheiro.
 
 #### Servidor  
-![cc_authentication_server](cc_authentication_s.png)
+![cc_authentication_server](cc_authentication_s.png)  
+
+
 #### Cliente  
-![cc_authentication_client](cc_authentication_c.png)
+![cc_authentication_client](cc_authentication_c.png)  
 
 
 ## **4. Conclusão**  
 
-Após a realização deste segundo trabalho prático, concluímos que os objetivos propostos no guião disponibilizado foram, de uma forma geral, alcançados com sucesso. Com este trabalho, os nossos conhecimentos sobre comunicações autenticadas e mecanismos de autenticação utilizados para as implementar aumentaram. É de salientar ainda que o trabalho de equipa e a superação de dificuldades foram fatores importantíssimos no sucesso do trabalho, melhorando as competências interpessoais de ambos os elementos do grupo.
+Após a realização deste terceiro trabalho prático, concluímos que os objetivos propostos no guião disponibilizado foram, de uma forma geral, alcançados com sucesso. Com este trabalho, os nossos conhecimentos sobre comunicações seguras com autenticação dos intervenientes e os respetivos mecanismos de autenticação utilizados para as implementar aumentaram. É de salientar ainda que o trabalho de equipa e a superação de dificuldades foram fatores importantíssimos no sucesso do trabalho, melhorando as competências interpessoais de ambos os elementos do grupo.
 
 ## **5. Bibliografia**    
 
